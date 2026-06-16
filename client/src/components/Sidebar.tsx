@@ -27,9 +27,9 @@ const Sidebar: React.FC = () => {
             </Link>
           </li>
           <li>
-            <Link 
-              to="/projects" 
-              className={`w-full px-4 py-2 rounded-md ${isActive('/projects') ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+            <Link
+              to="/dashboard"
+              className={`w-full px-4 py-2 rounded-md ${isActive('/dashboard') ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
             >
               Projects
             </Link>

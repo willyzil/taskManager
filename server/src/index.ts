@@ -4,50 +4,35 @@ import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { connect } from './db';
+import authRoutes from './routes/auth';
+import projectRoutes from './routes/projects';
 
-// Load environment variables
 dotenv.config();
 
-// Initialize express app
 const app = express();
 const PORT = parseInt(process.env.PORT || "5001", 10);
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Connect to database
 connect();
 
-// Import routes
-import authRoutes from './routes/auth';
-
-// Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/projects', projectRoutes);
 
-// Basic route
 app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'Task Manager API is running on port ' + PORT });
 });
 
-// Error handling middleware
 app.use((err: any, _req: Request, res: Response, _next: any) => {
   console.error('Error:', err);
-  res.status(500).json({ 
-    success: false,
-    message: 'Internal server error'
-  });
+  res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
-// 404 handler
 app.use((_req: Request, res: Response) => {
-  res.status(404).json({ 
-    success: false,
-    message: 'API endpoint not found'
-  });
+  res.status(404).json({ success: false, message: 'API endpoint not found' });
 });
 
-// Start server
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
@@ -56,10 +41,8 @@ const io = new Server(server, {
   },
 });
 
-// Socket.io connection
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
-
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
   });

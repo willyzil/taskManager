@@ -24,7 +24,7 @@ const Register: React.FC = () => {
     }
 
     try {
-      const response = await fetch('http://192.168.1.20:5001/api/auth/register', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
