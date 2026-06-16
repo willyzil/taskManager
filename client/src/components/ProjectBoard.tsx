@@ -19,6 +19,13 @@ const PRIORITY_COLORS: Record<string, string> = {
   URGENT: 'bg-red-600',
 };
 
+interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
 interface Task {
   id: string;
   title: string;
@@ -38,30 +45,44 @@ interface Project {
 const ProjectBoard: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Add task modal
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newPriority, setNewPriority] = useState('MEDIUM');
+  const [newAssigneeId, setNewAssigneeId] = useState('');
   const [creating, setCreating] = useState(false);
   const [taskError, setTaskError] = useState('');
+
+  // Invite member modal
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const [inviteSuccess, setInviteSuccess] = useState('');
 
   useEffect(() => {
     if (!id) return;
     Promise.all([
       api.get(`/api/projects/${id}`),
       api.get(`/api/tasks?projectId=${id}`),
-    ]).then(([projectData, tasksData]) => {
+      api.get(`/api/projects/${id}/members`),
+    ]).then(([projectData, tasksData, membersData]) => {
       if (projectData.success) setProject(projectData.project);
       if (tasksData.success) setTasks(tasksData.tasks);
+      if (membersData.success) setMembers(membersData.members);
     }).finally(() => setLoading(false));
   }, [id]);
 
   const moveTask = async (taskId: string, currentStatus: Status) => {
-    const currentIndex = STATUS_ORDER.indexOf(currentStatus);
-    if (currentIndex === STATUS_ORDER.length - 1) return;
-    const nextStatus = STATUS_ORDER[currentIndex + 1];
+    const idx = STATUS_ORDER.indexOf(currentStatus);
+    if (idx === STATUS_ORDER.length - 1) return;
+    const nextStatus = STATUS_ORDER[idx + 1];
     const data = await api.patch(`/api/tasks/${taskId}`, { status: nextStatus });
     if (data.success) {
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: nextStatus } : t));
@@ -72,12 +93,18 @@ const ProjectBoard: React.FC = () => {
     e.preventDefault();
     setCreating(true);
     setTaskError('');
-    const data = await api.post('/api/tasks', { title: newTitle, projectId: id, priority: newPriority });
+    const data = await api.post('/api/tasks', {
+      title: newTitle,
+      projectId: id,
+      priority: newPriority,
+      assigneeId: newAssigneeId || undefined,
+    });
     if (data.success) {
       setTasks(prev => [...prev, data.task]);
       setShowAddTask(false);
       setNewTitle('');
       setNewPriority('MEDIUM');
+      setNewAssigneeId('');
     } else {
       setTaskError(data.message || 'Failed to create task');
     }
@@ -86,16 +113,31 @@ const ProjectBoard: React.FC = () => {
 
   const handleDeleteTask = async (taskId: string) => {
     const data = await api.delete(`/api/tasks/${taskId}`);
+    if (data.success) setTasks(prev => prev.filter(t => t.id !== taskId));
+  };
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviting(true);
+    setInviteError('');
+    setInviteSuccess('');
+    const data = await api.post(`/api/projects/${id}/members`, { email: inviteEmail });
     if (data.success) {
-      setTasks(prev => prev.filter(t => t.id !== taskId));
+      setMembers(prev => [...prev, data.member]);
+      setInviteSuccess(`${data.member.name} has been added to the project`);
+      setInviteEmail('');
+    } else {
+      setInviteError(data.message || 'Failed to invite member');
     }
+    setInviting(false);
   };
 
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      {/* Header */}
+      <div className="flex justify-between items-start mb-6">
         <div>
           <button
             onClick={() => navigate('/dashboard')}
@@ -108,14 +150,40 @@ const ProjectBoard: React.FC = () => {
             <p className="text-sm text-gray-400 mt-1">{project.description}</p>
           )}
         </div>
-        <button
-          onClick={() => setShowAddTask(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-        >
-          Add Task
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Member avatars */}
+          <div className="flex items-center gap-1">
+            {members.slice(0, 5).map(m => (
+              <div
+                key={m.id}
+                title={`${m.name} (${m.role})`}
+                className="w-8 h-8 rounded-full bg-blue-700 flex items-center justify-center text-xs font-semibold border-2 border-gray-900"
+              >
+                {m.name.charAt(0).toUpperCase()}
+              </div>
+            ))}
+            {members.length > 5 && (
+              <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-xs">
+                +{members.length - 5}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setShowInvite(true)}
+            className="text-sm px-3 py-1.5 rounded-md border border-gray-600 hover:bg-gray-700"
+          >
+            + Invite
+          </button>
+          <button
+            onClick={() => setShowAddTask(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm"
+          >
+            Add Task
+          </button>
+        </div>
       </div>
 
+      {/* Kanban board */}
       <div className="flex space-x-4 overflow-x-auto pb-4">
         {STATUS_ORDER.map(status => {
           const columnTasks = tasks.filter(t => t.status === status);
@@ -123,28 +191,30 @@ const ProjectBoard: React.FC = () => {
           return (
             <div key={status} className="flex-shrink-0 w-72 bg-gray-800 rounded-lg border border-gray-700">
               <div className="p-3 border-b border-gray-700 flex items-center gap-2">
-                <h2 className="font-medium">{COLUMN_TITLES[status]}</h2>
+                <h2 className="font-medium text-sm">{COLUMN_TITLES[status]}</h2>
                 <span className="text-xs bg-gray-700 rounded-full px-2 py-0.5">{columnTasks.length}</span>
               </div>
-              <div className="p-2 space-y-2 min-h-[100px]">
+              <div className="p-2 space-y-2 min-h-[80px]">
                 {columnTasks.map(task => (
                   <div
                     key={task.id}
                     className="bg-gray-900 rounded-md border border-gray-700 p-3 hover:border-gray-600 transition-colors"
                   >
-                    <div className="flex justify-between items-start mb-2 gap-2">
+                    <div className="flex justify-between items-start gap-2 mb-2">
                       <h3 className="font-medium text-sm flex-1">{task.title}</h3>
                       <span className={`text-xs rounded-full px-2 py-0.5 shrink-0 ${PRIORITY_COLORS[task.priority] || 'bg-gray-600'}`}>
                         {task.priority}
                       </span>
                     </div>
-                    {task.assignee && (
-                      <div className="flex items-center gap-1 mb-2">
-                        <div className="bg-gray-600 rounded-full w-5 h-5 flex items-center justify-center text-xs shrink-0">
-                          {task.assignee.name.charAt(0)}
+                    {task.assignee ? (
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="bg-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs shrink-0">
+                          {task.assignee.name.charAt(0).toUpperCase()}
                         </div>
                         <span className="text-xs text-gray-400">{task.assignee.name}</span>
                       </div>
+                    ) : (
+                      <p className="text-xs text-gray-600 mb-2">Unassigned</p>
                     )}
                     {task.dueDate && (
                       <p className="text-xs text-gray-500 mb-2">
@@ -180,6 +250,7 @@ const ProjectBoard: React.FC = () => {
         })}
       </div>
 
+      {/* Add Task modal */}
       {showAddTask && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 w-full max-w-md">
@@ -197,7 +268,7 @@ const ProjectBoard: React.FC = () => {
                   autoFocus
                 />
               </div>
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-300 mb-1">Priority</label>
                 <select
                   value={newPriority}
@@ -208,6 +279,21 @@ const ProjectBoard: React.FC = () => {
                   <option value="MEDIUM">Medium</option>
                   <option value="HIGH">High</option>
                   <option value="URGENT">Urgent</option>
+                </select>
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Assign to <span className="text-gray-500">(optional)</span>
+                </label>
+                <select
+                  value={newAssigneeId}
+                  onChange={e => setNewAssigneeId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Unassigned</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+                  ))}
                 </select>
               </div>
               <div className="flex gap-3 justify-end">
@@ -224,6 +310,65 @@ const ProjectBoard: React.FC = () => {
                   className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                 >
                   {creating ? 'Adding...' : 'Add Task'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Invite member modal */}
+      {showInvite && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-1">Invite Member</h2>
+            <p className="text-sm text-gray-400 mb-4">The user must already have an account.</p>
+            {inviteError && <p className="text-red-400 text-sm mb-3">{inviteError}</p>}
+            {inviteSuccess && <p className="text-green-400 text-sm mb-3">{inviteSuccess}</p>}
+
+            {/* Current members list */}
+            <div className="mb-4">
+              <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Current members</p>
+              <div className="space-y-1">
+                {members.map(m => (
+                  <div key={m.id} className="flex items-center gap-2 text-sm">
+                    <div className="w-6 h-6 rounded-full bg-blue-700 flex items-center justify-center text-xs shrink-0">
+                      {m.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span>{m.name}</span>
+                    <span className="text-xs text-gray-500 ml-auto">{m.role}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <form onSubmit={handleInvite}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-1">Email address</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="teammate@example.com"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setShowInvite(false); setInviteError(''); setInviteSuccess(''); }}
+                  className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={inviting}
+                  className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {inviting ? 'Inviting...' : 'Invite'}
                 </button>
               </div>
             </form>
