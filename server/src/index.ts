@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import { connect } from './db';
 import authRoutes from './routes/auth';
 import projectRoutes from './routes/projects';
+import taskRoutes from './routes/tasks';
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ connect();
 
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/tasks', taskRoutes);
 
 app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'Task Manager API is running on port ' + PORT });

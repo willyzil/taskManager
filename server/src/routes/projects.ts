@@ -1,123 +1,63 @@
 import express from 'express';
-import { findUserById } from '../models/user';
+import { requireAuth, AuthRequest } from '../middleware/auth';
+import { createProject, findProjectsByOwnerId, findProjectById, updateProject, deleteProject } from '../models/project';
 
 const router = express.Router();
 
-// Get all projects for a user
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const userId = req.headers['user-id'];
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'User ID is required'
-      });
-    }
-    
-    // In a real implementation, we would validate the user exists
-    // For now, we'll proceed with basic logic
-    
-    res.json({
-      success: true,
-      message: 'Projects route implemented',
-      projects: []
-    });
+    const projects = await findProjectsByOwnerId(req.user!.id);
+    res.json({ success: true, projects });
   } catch (error) {
     console.error('Error getting projects:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
-// Create a new project (basic implementation)
-router.post('/', async (req, res) => {
+router.get('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { name, description, ownerId } = req.body;
-    
-    if (!name || !ownerId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name and owner ID are required'
-      });
-    }
-    
-    res.status(201).json({
-      success: true,
-      message: 'Project created successfully',
-      project: {
-        id: Date.now().toString(),
-        name,
-        description,
-        ownerId,
-        createdAt: new Date()
-      }
-    });
+    const project = await findProjectById(req.params.id);
+    if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
+    res.json({ success: true, project });
+  } catch (error) {
+    console.error('Error getting project:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+router.post('/', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name) return res.status(400).json({ success: false, message: 'Name is required' });
+    const project = await createProject({ name, description: description || null, ownerId: req.user!.id });
+    if (!project) return res.status(500).json({ success: false, message: 'Failed to create project' });
+    res.status(201).json({ success: true, project });
   } catch (error) {
     console.error('Error creating project:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
-// Update a project (basic implementation)
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
     const { name, description } = req.body;
-    
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Project ID is required'
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Project updated successfully',
-      project: {
-        id,
-        name,
-        description,
-        updatedAt: new Date()
-      }
-    });
+    const project = await updateProject(req.params.id, { name, description });
+    if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
+    res.json({ success: true, project });
   } catch (error) {
     console.error('Error updating project:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
-// Delete a project (basic implementation)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
-    
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Project ID is required'
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Project deleted successfully'
-    });
+    const ok = await deleteProject(req.params.id);
+    if (!ok) return res.status(404).json({ success: false, message: 'Project not found' });
+    res.json({ success: true, message: 'Project deleted' });
   } catch (error) {
     console.error('Error deleting project:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
