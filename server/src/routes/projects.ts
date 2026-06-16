@@ -52,8 +52,12 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res) => {
 
 router.delete('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const ok = await deleteProject(req.params.id);
-    if (!ok) return res.status(404).json({ success: false, message: 'Project not found' });
+    const project = await findProjectById(req.params.id);
+    if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
+    if (project.ownerId !== req.user!.id) {
+      return res.status(403).json({ success: false, message: 'Only the project owner can delete this project' });
+    }
+    await deleteProject(req.params.id);
     res.json({ success: true, message: 'Project deleted' });
   } catch (error) {
     console.error('Error deleting project:', error);

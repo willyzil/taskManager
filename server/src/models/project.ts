@@ -117,11 +117,12 @@ export async function updateProject(id: string, input: UpdateProjectInput): Prom
 
 export async function deleteProject(id: string): Promise<boolean> {
   try {
-    await prisma.project.delete({
-      where: {
-        id,
-      },
-    });
+    await prisma.$transaction([
+      prisma.comment.deleteMany({ where: { task: { projectId: id } } }),
+      prisma.task.deleteMany({ where: { projectId: id } }),
+      prisma.projectMember.deleteMany({ where: { projectId: id } }),
+      prisma.project.delete({ where: { id } }),
+    ]);
     return true;
   } catch (error) {
     console.error('Error deleting project:', error);

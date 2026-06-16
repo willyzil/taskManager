@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Project {
   id: string;
   name: string;
   description: string | null;
+  ownerId: string;
   createdAt: string;
 }
 
 const Dashboard: React.FC = () => {
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -39,6 +42,14 @@ const Dashboard: React.FC = () => {
       setError(data.message || 'Failed to create project');
     }
     setCreating(false);
+  };
+
+  const handleDelete = async (projectId: string, projectName: string) => {
+    if (!window.confirm(`Delete "${projectName}"? This will permanently remove all tasks and data.`)) return;
+    const data = await api.delete(`/api/projects/${projectId}`);
+    if (data.success) {
+      setProjects(prev => prev.filter(p => p.id !== projectId));
+    }
   };
 
   return (
@@ -73,13 +84,21 @@ const Dashboard: React.FC = () => {
                   Created {new Date(project.createdAt).toLocaleDateString()}
                 </p>
               </div>
-              <div className="px-4 py-3 bg-gray-900 border-t border-gray-700">
+              <div className="px-4 py-3 bg-gray-900 border-t border-gray-700 flex justify-between items-center">
                 <button
                   onClick={() => navigate(`/project/${project.id}`)}
                   className="text-blue-400 hover:text-blue-300 text-sm"
                 >
                   View Board →
                 </button>
+                {project.ownerId === user?.id && (
+                  <button
+                    onClick={() => handleDelete(project.id, project.name)}
+                    className="text-xs text-gray-600 hover:text-red-400"
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           ))}
