@@ -19,17 +19,9 @@ const Sidebar: React.FC = () => {
       <nav className="flex-1 p-2">
         <ul className="space-y-1">
           <li>
-            <Link 
-              to="/dashboard" 
-              className={`w-full px-4 py-2 rounded-md ${isActive('/dashboard') ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-            >
-              Dashboard
-            </Link>
-          </li>
-          <li>
             <Link
               to="/dashboard"
-              className={`w-full px-4 py-2 rounded-md ${isActive('/dashboard') ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+              className={`flex w-full px-4 py-2 rounded-md ${isActive('/dashboard') ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
             >
               Projects
             </Link>
