@@ -1,0 +1,1 @@
+const http = require("http"); const server = http.createServer((req, res) => { res.writeHead(200, {"Content-Type": "text/plain"}); res.end("Task Manager API is running"); }); server.listen(5001, () => console.log("Server on port 5001"));
