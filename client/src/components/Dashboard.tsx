@@ -20,6 +20,8 @@ const Dashboard: React.FC = () => {
   const [newDesc, setNewDesc] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,12 +46,15 @@ const Dashboard: React.FC = () => {
     setCreating(false);
   };
 
-  const handleDelete = async (projectId: string, projectName: string) => {
-    if (!window.confirm(`Delete "${projectName}"? This will permanently remove all tasks and data.`)) return;
-    const data = await api.delete(`/api/projects/${projectId}`);
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    const data = await api.delete(`/api/projects/${confirmDelete.id}`);
     if (data.success) {
-      setProjects(prev => prev.filter(p => p.id !== projectId));
+      setProjects(prev => prev.filter(p => p.id !== confirmDelete.id));
     }
+    setDeleting(false);
+    setConfirmDelete(null);
   };
 
   return (
@@ -93,7 +98,7 @@ const Dashboard: React.FC = () => {
                 </button>
                 {project.ownerId === user?.id && (
                   <button
-                    onClick={() => handleDelete(project.id, project.name)}
+                    onClick={() => setConfirmDelete(project)}
                     className="text-xs text-gray-600 hover:text-red-400"
                   >
                     Delete
@@ -105,6 +110,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
+      {/* New Project modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 w-full max-w-md">
@@ -150,6 +156,37 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 w-full max-w-sm">
+            <h2 className="text-lg font-semibold mb-2">Delete Project</h2>
+            <p className="text-gray-400 text-sm mb-1">
+              Are you sure you want to delete{' '}
+              <span className="text-white font-medium">"{confirmDelete.name}"</span>?
+            </p>
+            <p className="text-gray-500 text-xs mb-6">
+              This will permanently remove all tasks and data. This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-sm disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}
