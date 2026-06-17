@@ -90,7 +90,7 @@ router.post('/login', async (req, res) => {
     }
     
     // Verify password
-    const isValidPassword = await verifyPassword(email, password);
+    const isValidPassword = await verifyPassword(user, password);
     if (!isValidPassword) {
       return res.status(400).json({
         success: false,

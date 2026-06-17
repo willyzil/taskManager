@@ -5,6 +5,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string;
   avatar?: string;
   createdAt: Date;
 }
@@ -90,16 +91,9 @@ export async function findUserById(id: string): Promise<User | null> {
   }
 }
 
-export async function verifyPassword(userEmail: string, password: string): Promise<boolean> {
+export async function verifyPassword(user: User, password: string): Promise<boolean> {
   try {
-    const user = await prisma.user.findUnique({
-      where: {
-        email: userEmail,
-      },
-    });
-    
     if (!user || !user.password) return false;
-    
     return await bcrypt.compare(password, user.password);
   } catch (error) {
     console.error('Error verifying password:', error);

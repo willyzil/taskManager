@@ -16,7 +16,7 @@ async function notifyAssignee(assigneeId: string, taskTitle: string, taskId: str
     data: {
       userId: assigneeId,
       type: 'task_assigned',
-      message: `You were assigned "${taskTitle}" in project "${project?.name}"`,
+      message: `You were assigned \"${taskTitle}\" in project \"${project?.name}\"`,
       projectId,
       taskId,
     },
@@ -24,11 +24,29 @@ async function notifyAssignee(assigneeId: string, taskTitle: string, taskId: str
   getIo().to(`user:${assigneeId}`).emit('notification', notification);
 }
 
+// Helper function to check if a user is a member of a project
+async function isMember(userId: string, projectId: string): Promise<boolean> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      members: { where: { userId } },
+    },
+  });
+
+  if (!project) return false;
+
+  return project.ownerId === userId || project.members.some(m => m.userId === userId);
+}
+
 // GET /api/tasks?projectId=xxx
 router.get('/', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { projectId } = req.query;
     if (!projectId) return res.status(400).json({ success: false, message: 'projectId is required' });
+
+    const isProjectMember = await isMember(req.user!.id, projectId as string);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
     const tasks = await prisma.task.findMany({
       where: { projectId: projectId as string },
       include: taskInclude,
@@ -72,32 +90,63 @@ router.post('/', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// GET /api/tasks/:id
+router.get('/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const task = await prisma.task.findUnique({
+      where: { id },
+      include: taskInclude,
+    });
+
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+    const isProjectMember = await isMember(req.user!.id, task.projectId);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    res.json({ success: true, task });
+  } catch (error) {
+    console.error('Error getting task:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // PATCH /api/tasks/:id
 router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { status, title, description, priority, dueDate, assigneeId } = req.body;
+    const { id } = req.params;
+    const { title, description, priority, dueDate, assigneeId } = req.body;
 
-    const current = await prisma.task.findUnique({ where: { id: req.params.id } });
+    const task = await prisma.task.findUnique({
+      where: { id },
+      include: {
+        project: { select: { id: true } },
+        assignee: { select: { id: true, name: true } },
+      },
+    });
 
-    const task = await prisma.task.update({
-      where: { id: req.params.id },
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+    const isProjectMember = await isMember(req.user!.id, task.projectId);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    const updatedTask = await prisma.task.update({
+      where: { id },
       data: {
-        ...(status !== undefined && { status }),
-        ...(title !== undefined && { title }),
-        ...(description !== undefined && { description }),
-        ...(priority !== undefined && { priority }),
-        ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
-        ...(assigneeId !== undefined && { assigneeId: assigneeId || null }),
+        title: title !== undefined ? title : task.title,
+        description: description !== undefined ? description : task.description,
+        priority: priority !== undefined ? priority : task.priority,
+        dueDate: dueDate !== undefined ? new Date(dueDate) : task.dueDate,
+        ...(assigneeId !== undefined && { assigneeId }),
       },
       include: taskInclude,
     });
 
-    // Notify if assignee changed to someone else (and isn't the person making the change)
-    if (assigneeId && assigneeId !== current?.assigneeId && assigneeId !== req.user!.id) {
-      await notifyAssignee(assigneeId, task.title, task.id, task.projectId);
+    if (assigneeId && assigneeId !== task.assigneeId && assigneeId !== req.user!.id) {
+      await notifyAssignee(assigneeId, updatedTask.title, updatedTask.id, task.projectId);
     }
 
-    res.json({ success: true, task });
+    res.json({ success: true, task: updatedTask });
   } catch (error) {
     console.error('Error updating task:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
@@ -107,8 +156,20 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
 // DELETE /api/tasks/:id
 router.delete('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    await prisma.task.delete({ where: { id: req.params.id } });
-    res.json({ success: true, message: 'Task deleted' });
+    const { id } = req.params;
+
+    const task = await prisma.task.findUnique({
+      where: { id },
+      include: { project: { select: { id: true } } },
+    });
+
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+    const isProjectMember = await isMember(req.user!.id, task.projectId);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    await prisma.task.delete({ where: { id } });
+    res.json({ success: true, message: 'Task deleted successfully' });
   } catch (error) {
     console.error('Error deleting task:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });

@@ -32,7 +32,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project 
         }
       },
     });
-    
+
     return {
       id: project.id,
       name: project.name,
@@ -53,9 +53,9 @@ export async function findProjectById(id: string): Promise<Project | null> {
         id,
       },
     });
-    
+
     if (!project) return null;
-    
+
     return {
       id: project.id,
       name: project.name,
@@ -73,16 +73,35 @@ export async function findProjectsByOwnerId(ownerId: string): Promise<Project[]>
   try {
     const projects = await prisma.project.findMany({
       where: {
-        ownerId,
+        OR: [
+          {
+            ownerId,
+          },
+          {
+            members: {
+              some: {
+                userId: ownerId,
+              },
+            },
+          },
+        ],
+      },
+      include: {
+        members: true,
       },
     });
-    
-    return projects.map(project => ({
+
+    return projects.map((project) => ({
       id: project.id,
       name: project.name,
       description: project.description,
       ownerId: project.ownerId,
       createdAt: project.createdAt,
+      members: project.members.map((m) => ({
+        id: m.id,
+        userId: m.userId,
+        role: m.role,
+      })),
     }));
   } catch (error) {
     console.error('Error finding projects by owner:', error);
@@ -101,7 +120,7 @@ export async function updateProject(id: string, input: UpdateProjectInput): Prom
         description: input.description,
       },
     });
-    
+
     return {
       id: project.id,
       name: project.name,
