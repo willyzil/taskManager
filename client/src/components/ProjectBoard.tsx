@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 
@@ -65,6 +65,9 @@ const ProjectBoard: React.FC = () => {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
+  const [searchResults, setSearchResults] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (!id) return;
@@ -116,6 +119,27 @@ const ProjectBoard: React.FC = () => {
     if (data.success) setTasks(prev => prev.filter(t => t.id !== taskId));
   };
 
+  const handleInviteSearch = (value: string) => {
+    setInviteEmail(value);
+    setShowDropdown(false);
+    clearTimeout(searchTimeout.current);
+    if (value.trim().length < 2) { setSearchResults([]); return; }
+    searchTimeout.current = setTimeout(async () => {
+      const data = await api.get(`/api/users/search?q=${encodeURIComponent(value)}`);
+      if (data.success) {
+        const existingIds = new Set(members.map(m => m.id));
+        setSearchResults(data.users.filter((u: { id: string }) => !existingIds.has(u.id)));
+        setShowDropdown(true);
+      }
+    }, 300);
+  };
+
+  const selectSearchResult = (u: { id: string; name: string; email: string }) => {
+    setInviteEmail(u.email);
+    setSearchResults([]);
+    setShowDropdown(false);
+  };
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setInviting(true);
@@ -130,6 +154,15 @@ const ProjectBoard: React.FC = () => {
       setInviteError(data.message || 'Failed to invite member');
     }
     setInviting(false);
+  };
+
+  const closeInviteModal = () => {
+    setShowInvite(false);
+    setInviteEmail('');
+    setInviteError('');
+    setInviteSuccess('');
+    setSearchResults([]);
+    setShowDropdown(false);
   };
 
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
@@ -344,21 +377,48 @@ const ProjectBoard: React.FC = () => {
 
             <form onSubmit={handleInvite}>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-1">Email address</label>
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="teammate@example.com"
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                  autoFocus
-                />
+                <label className="block text-sm font-medium text-gray-300 mb-1">Search by name or email</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={inviteEmail}
+                    onChange={e => handleInviteSearch(e.target.value)}
+                    onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+                    onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+                    placeholder="Start typing a name or email..."
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    autoFocus
+                  />
+                  {showDropdown && searchResults.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-md shadow-xl z-10 overflow-hidden">
+                      {searchResults.map(u => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onMouseDown={() => selectSearchResult(u)}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-800 flex items-center gap-3 transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-blue-700 flex items-center justify-center text-sm font-semibold shrink-0">
+                            {u.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm text-white">{u.name}</p>
+                            <p className="text-xs text-gray-400">{u.email}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {inviteEmail.length >= 2 && !showDropdown && searchResults.length === 0 && (
+                    <p className="mt-1 text-xs text-gray-500">No users found — you can still invite by exact email</p>
+                  )}
+                </div>
               </div>
               <div className="flex gap-3 justify-end">
                 <button
                   type="button"
-                  onClick={() => { setShowInvite(false); setInviteError(''); setInviteSuccess(''); }}
+                  onClick={closeInviteModal}
                   className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600"
                 >
                   Close
