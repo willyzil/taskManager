@@ -36,7 +36,8 @@ export async function createUser(input: CreateUserInput): Promise<User | null> {
       id: user.id,
       name: user.name,
       email: user.email,
-      avatar: user.avatar,
+      avatar: user.avatar ?? undefined,
+      password: user.password,
       createdAt: user.createdAt,
     };
   } catch (error) {
@@ -59,7 +60,8 @@ export async function findUserByEmail(email: string): Promise<User | null> {
       id: user.id,
       name: user.name,
       email: user.email,
-      avatar: user.avatar,
+      avatar: user.avatar ?? undefined,
+      password: user.password,
       createdAt: user.createdAt,
     };
   } catch (error) {
@@ -82,7 +84,8 @@ export async function findUserById(id: string): Promise<User | null> {
       id: user.id,
       name: user.name,
       email: user.email,
-      avatar: user.avatar,
+      avatar: user.avatar ?? undefined,
+      password: user.password,
       createdAt: user.createdAt,
     };
   } catch (error) {

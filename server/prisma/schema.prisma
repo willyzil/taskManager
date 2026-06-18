@@ -20,6 +20,7 @@ model User {
   comments       Comment[]
   projectMembers ProjectMember[]
   notifications  Notification[]
+  activityLogs   ActivityLog[]
 }
 
 model Notification {
@@ -43,6 +44,7 @@ model Project {
   createdAt   DateTime        @default(now())
   tasks       Task[]
   members     ProjectMember[]
+  activityLogs ActivityLog[]
 }
 
 model ProjectMember {
@@ -80,4 +82,31 @@ model Comment {
   author    User     @relation(fields: [authorId], references: [id])
   body      String
   createdAt DateTime @default(now())
+}
+
+enum ActivityType {
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_MOVED
+  TASK_ASSIGNED
+  COMMENT_ADDED
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  MEMBER_INVITED
+}
+
+model ActivityLog {
+  id          String      @id @default(cuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id])
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  action      ActivityType
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  
+  @@index([projectId])
+  @@index([userId])
+  @@index([createdAt])
 }

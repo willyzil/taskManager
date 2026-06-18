@@ -51,18 +51,26 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-y-0 left-0 w-60 bg-gray-800 text-white flex flex-col">
-      <div className="p-4 border-b border-gray-700">
-        <h1 className="text-xl font-bold">Task Manager</h1>
+    <div className="fixed inset-y-0 left-0 w-64 bg-[var(--sidebar)] text-text flex flex-col border-r border-border-subtle flex-shrink-0">
+      <div className="p-5 flex items-center gap-3 border-b border-border-subtle bg-[var(--sidebar)]/95 backdrop-blur-sm">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg">
+          T
+        </div>
+        <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          Task Manager
+        </h1>
       </div>
 
-      <nav className="flex-1 p-2">
+      <nav className="flex-1 py-4 px-2 overflow-y-auto">
         <ul className="space-y-1">
           <li>
             <Link
               to="/dashboard"
-              className={`flex w-full px-4 py-2 rounded-md ${isActive('/dashboard') ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+              className={`flex w-full px-4 py-2.5 rounded-lg mb-1.5 flex items-center gap-2.5 cursor-pointer transition-all-fast hover:bg-[var(--card)]/50 hover:translate-x-0.5 ${isActive('/dashboard') ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-l-2 border-accent bg-[var(--card)]/60 text-text-inverse' : 'text-text-subtle hover:text-text'}`}
             >
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
               Projects
             </Link>
           </li>
@@ -73,42 +81,47 @@ const Sidebar: React.FC = () => {
       <div className="relative px-3 mb-2">
         <button
           onClick={() => setShowPanel(v => !v)}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-[var(--card)]/50 transition-all-fast text-text-subtle hover:text-text"
         >
-          <span>Notifications</span>
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <span className="text-sm font-medium">Notifications</span>
+          </div>
           {unreadCount > 0 && (
-            <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+            <span className="bg-accent text-white text-xs font-semibold rounded-full px-2.5 py-0.75 min-w-[20px] text-center shadow-md ring-2 ring-[var(--sidebar)]">
               {unreadCount}
             </span>
           )}
         </button>
 
         {showPanel && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl max-h-80 overflow-y-auto z-50">
-            <div className="sticky top-0 bg-gray-900 flex justify-between items-center px-3 py-2 border-b border-gray-700">
-              <span className="text-xs font-semibold text-gray-300">Notifications</span>
+          <div className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--sidebar)] border border-border-subtle rounded-xl shadow-2xl max-h-80 overflow-y-auto z-50">
+            <div className="sticky top-0 bg-[var(--sidebar)] flex justify-between items-center px-3 py-2.5 border-b border-border-subtle bg-[var(--sidebar)]/95 backdrop-blur-sm">
+              <span className="text-xs font-semibold text-text-subtle">Notifications</span>
               {unreadCount > 0 && (
-                <button onClick={markAllRead} className="text-xs text-blue-400 hover:text-blue-300">
+                <button onClick={markAllRead} className="text-xs text-accent hover:text-accent/80 transition-colors font-medium">
                   Mark all read
                 </button>
               )}
             </div>
             {notifications.length === 0 ? (
-              <p className="text-xs text-gray-500 text-center py-8">No notifications yet</p>
+              <p className="text-xs text-text-subtle text-center py-8">No notifications yet</p>
             ) : (
               notifications.map(n => (
                 <div
                   key={n.id}
                   onClick={() => !n.read && markRead(n.id)}
-                  className={`px-3 py-2 border-b border-gray-800 cursor-pointer hover:bg-gray-800 transition-colors ${!n.read ? 'bg-gray-800/60' : ''}`}
+                  className={`px-3 py-2.5 border-b border-border-subtle/50 cursor-pointer transition-colors ${!n.read ? 'bg-[var(--card)]/60' : ''}`}
                 >
                   <div className="flex items-start gap-2">
-                    {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
-                    <p className={`text-xs leading-snug ${n.read ? 'text-gray-400 ml-4' : 'text-white'}`}>
+                    {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-accent shrink-0 animate-pulse" />}
+                    <p className={`text-xs leading-snug ${n.read ? 'text-text-subtle/70' : 'text-text'}`}>
                       {n.message}
                     </p>
                   </div>
-                  <p className="text-xs text-gray-600 mt-0.5 ml-4">
+                  <p className="text-xs text-text-subtle/50 mt-0.5 ml-4">
                     {new Date(n.createdAt).toLocaleString()}
                   </p>
                 </div>
@@ -118,23 +131,25 @@ const Sidebar: React.FC = () => {
         )}
       </div>
 
-      <div className="p-4 border-t border-gray-700">
-        <div className="flex items-center space-x-3 mb-3">
-          <div className="bg-blue-600 rounded-full w-9 h-9 flex items-center justify-center shrink-0">
-            <span className="font-semibold text-sm">{user?.name.charAt(0).toUpperCase()}</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{user?.name}</p>
-            <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-          </div>
+      <div className="p-4 border-t border-border-subtle flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold shadow-md ring-2 ring-[var(--sidebar)] flex-shrink-0">
+          {user?.name.charAt(0).toUpperCase()}
         </div>
-        <button
-          onClick={logout}
-          className="w-full px-3 py-2 text-sm rounded-md bg-gray-700 hover:bg-gray-600"
-        >
-          Logout
-        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-text-inverse truncate">{user?.name}</p>
+          <p className="text-xs text-text-subtle truncate">{user?.email}</p>
+        </div>
       </div>
+
+      <button
+        onClick={logout}
+        className="w-full px-4 py-2.5 text-sm rounded-lg bg-[var(--card)]/50 hover:bg-[var(--card)] border border-border-subtle/50 hover:border-accent/30 transition-all-fast text-text-subtle hover:text-accent flex items-center justify-center gap-2"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        Logout
+      </button>
     </div>
   );
 };

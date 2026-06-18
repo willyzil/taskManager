@@ -10,6 +10,7 @@ import taskRoutes from './routes/tasks';
 import memberRoutes from './routes/members';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
+import activityRoutes from './routes/activity';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use('/api/projects/:projectId/members', memberRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/activity', activityRoutes);
 
 app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'Task Manager API is running on port ' + PORT });

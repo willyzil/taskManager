@@ -2,6 +2,7 @@ import express from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { prisma } from '../db';
 import { getIo } from '../socket';
+import { createActivityLog } from '../models/activity';
 
 const router = express.Router();
 
@@ -16,7 +17,7 @@ async function notifyAssignee(assigneeId: string, taskTitle: string, taskId: str
     data: {
       userId: assigneeId,
       type: 'task_assigned',
-      message: `You were assigned \"${taskTitle}\" in project \"${project?.name}\"`,
+      message: `You were assigned "${taskTitle}" in project "${project?.name}"`,
       projectId,
       taskId,
     },
@@ -83,6 +84,15 @@ router.post('/', requireAuth, async (req: AuthRequest, res) => {
       await notifyAssignee(assigneeId, title, task.id, projectId);
     }
 
+    // Log activity
+    await createActivityLog({
+      projectId,
+      userId: req.user!.id,
+      action: 'TASK_CREATED',
+      entityId: task.id,
+      metadata: { title },
+    });
+
     res.status(201).json({ success: true, task });
   } catch (error) {
     console.error('Error creating task:', error);
@@ -120,7 +130,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
     const task = await prisma.task.findUnique({
       where: { id },
       include: {
-        project: { select: { id: true } },
+        project: { select: { id: true, name: true } },
         assignee: { select: { id: true, name: true } },
       },
     });
@@ -142,9 +152,44 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
       include: taskInclude,
     });
 
-    if (assigneeId && assigneeId !== task.assigneeId && assigneeId !== req.user!.id) {
-      await notifyAssignee(assigneeId, updatedTask.title, updatedTask.id, task.projectId);
-    }
+    // Log activity
+    const activityAction = assigneeId 
+      ? 'TASK_ASSIGNED'
+      : priority !== undefined && priority !== task.priority ? 'TASK_UPDATED' :
+        dueDate !== undefined ? 'TASK_UPDATED' :
+        title !== undefined ? 'TASK_UPDATED' :
+        description !== undefined ? 'TASK_UPDATED' :
+        'TASK_UPDATED';
+    
+    const activityMetadata: Record<string, any> = {
+      title: updatedTask.title,
+      ...(priority !== undefined && priority !== task.priority && { priority: updatedTask.priority }),
+      ...(assigneeId !== undefined && assigneeId !== task.assigneeId && { assignee: updatedTask.assignee?.name }),
+    };
+
+    await createActivityLog({
+      projectId: task.projectId,
+      userId: req.user!.id,
+      action: activityAction,
+      entityId: updatedTask.id,
+      metadata: activityMetadata,
+    });
+
+    // Emit real-time activity event
+    const activityData = {
+      action: activityAction,
+      taskId: updatedTask.id,
+      title: updatedTask.title,
+      priority: activityMetadata.priority || task.priority,
+      assignee: activityMetadata.assignee || null,
+      userId: req.user!.id,
+      userName: req.user?.name,
+      userAvatar: req.user?.avatar,
+      projectId: task.projectId,
+      projectName: task.project.name,
+    };
+    
+    getIo().to(`project:${task.projectId}`).emit('activity:new', activityData);
 
     res.json({ success: true, task: updatedTask });
   } catch (error) {

@@ -67,7 +67,7 @@ const ProjectBoard: React.FC = () => {
   const [inviteSuccess, setInviteSuccess] = useState('');
   const [searchResults, setSearchResults] = useState<{ id: string; name: string; email: string }[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
-  const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!id) return;
@@ -168,49 +168,58 @@ const ProjectBoard: React.FC = () => {
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
 
   return (
-    <div className="p-6">
+    <div className="p-6 min-h-screen bg-[var(--background)] text-text">
       {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
           <button
             onClick={() => navigate('/dashboard')}
-            className="text-sm text-gray-400 hover:text-gray-300 mb-1 block"
+            className="text-text-subtle hover:text-accent transition-colors mb-2 block flex items-center gap-2"
           >
-            ← Back to Projects
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span className="text-sm font-medium">← Back to Projects</span>
           </button>
-          <h1 className="text-2xl font-bold">{project?.name || 'Project Board'}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{project?.name || 'Project Board'}</h1>
           {project?.description && (
-            <p className="text-sm text-gray-400 mt-1">{project.description}</p>
+            <p className="text-sm text-text-muted mt-1">{project.description}</p>
           )}
         </div>
         <div className="flex items-center gap-3">
-          {/* Member avatars */}
-          <div className="flex items-center gap-1">
+          {/* Member avatars - stacked */}
+          <div className="flex items-center -space-x-2">
             {members.slice(0, 5).map(m => (
               <div
                 key={m.id}
                 title={`${m.name} (${m.role})`}
-                className="w-8 h-8 rounded-full bg-blue-700 flex items-center justify-center text-xs font-semibold border-2 border-gray-900"
+                className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-semibold border-2 border-[var(--sidebar)] shadow-sm ring-1 ring-white/10"
               >
                 {m.name.charAt(0).toUpperCase()}
               </div>
             ))}
             {members.length > 5 && (
-              <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-xs">
+              <div className="w-8 h-8 rounded-full bg-[var(--card)] border-2 border-[var(--sidebar)] flex items-center justify-center text-xs text-text-subtle font-medium shadow-sm ring-1 ring-white/10">
                 +{members.length - 5}
               </div>
             )}
           </div>
           <button
             onClick={() => setShowInvite(true)}
-            className="text-sm px-3 py-1.5 rounded-md border border-gray-600 hover:bg-gray-700"
+            className="text-sm px-3 py-2 rounded-lg border-2 border-border-subtle hover:bg-[var(--card)] hover:border-accent/30 transition-all-fast text-text-subtle hover:text-text flex items-center gap-1 font-medium"
           >
-            + Invite
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Invite
           </button>
           <button
             onClick={() => setShowAddTask(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm"
+            className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white px-4 py-2 rounded-lg shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all-fast font-medium text-sm flex items-center gap-2"
           >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
             Add Task
           </button>
         </div>
@@ -221,53 +230,65 @@ const ProjectBoard: React.FC = () => {
         {STATUS_ORDER.map(status => {
           const columnTasks = tasks.filter(t => t.status === status);
           const nextStatus = STATUS_ORDER[STATUS_ORDER.indexOf(status) + 1];
+          const colClass = {
+            TODO: 'kanban-todo',
+            IN_PROGRESS: 'kanban-in-progress',
+            IN_REVIEW: 'kanban-in-review',
+            DONE: 'kanban-done'
+          }[status];
+          
           return (
-            <div key={status} className="flex-shrink-0 w-72 bg-gray-800 rounded-lg border border-gray-700">
-              <div className="p-3 border-b border-gray-700 flex items-center gap-2">
-                <h2 className="font-medium text-sm">{COLUMN_TITLES[status]}</h2>
-                <span className="text-xs bg-gray-700 rounded-full px-2 py-0.5">{columnTasks.length}</span>
+            <div key={status} className={`flex-shrink-0 w-72 bg-[var(--card)]/50 backdrop-blur-sm rounded-xl border border-border-subtle/50 ${colClass}`}>
+              <div className="p-3 border-b border-border-subtle/50 flex items-center gap-2">
+                <h2 className="font-semibold text-sm uppercase tracking-wide text-text-subtle">{COLUMN_TITLES[status]}</h2>
+                <span className="text-xs bg-[var(--accent)] text-white font-semibold rounded-full px-2.5 py-0.75 shadow-sm">
+                  {columnTasks.length}
+                </span>
               </div>
-              <div className="p-2 space-y-2 min-h-[80px]">
+              <div className="p-2.5 space-y-2.5 min-h-[80px]">
                 {columnTasks.map(task => (
                   <div
                     key={task.id}
-                    className="bg-gray-900 rounded-md border border-gray-700 p-3 hover:border-gray-600 transition-colors"
+                    className="bg-[var(--card)] border border-border-subtle/50 rounded-lg p-3.5 hover:border-accent/20 hover:-translate-y-0.5 transition-all-fast cursor-pointer group shadow-sm hover:shadow-md"
                   >
                     <div className="flex justify-between items-start gap-2 mb-2">
-                      <h3 className="font-medium text-sm flex-1">{task.title}</h3>
-                      <span className={`text-xs rounded-full px-2 py-0.5 shrink-0 ${PRIORITY_COLORS[task.priority] || 'bg-gray-600'}`}>
+                      <h3 className="font-semibold text-sm flex-1 leading-snug group-hover:text-white transition-colors">{task.title}</h3>
+                      <span className={`text-xs rounded-full px-2 py-0.75 shrink-0 font-medium ${PRIORITY_COLORS[task.priority] || 'bg-gray-700/50 text-text-muted border border-gray-600/30'}`}>
                         {task.priority}
                       </span>
                     </div>
                     {task.assignee ? (
                       <div className="flex items-center gap-1.5 mb-2">
-                        <div className="bg-blue-700 rounded-full w-5 h-5 flex items-center justify-center text-xs shrink-0">
+                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full w-5 h-5 flex items-center justify-center text-xs shrink-0 text-white font-semibold border border-[var(--card)]">
                           {task.assignee.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-xs text-gray-400">{task.assignee.name}</span>
+                        <span className="text-xs text-text-muted">{task.assignee.name}</span>
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-600 mb-2">Unassigned</p>
+                      <p className="text-xs text-text-subtle/60 mb-2">Unassigned</p>
                     )}
                     {task.dueDate && (
-                      <p className="text-xs text-gray-500 mb-2">
+                      <p className="text-xs text-text-subtle/70 mb-2">
                         Due {new Date(task.dueDate).toLocaleDateString()}
                       </p>
                     )}
-                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-800">
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-border-subtle/30">
                       {nextStatus ? (
                         <button
                           onClick={() => moveTask(task.id, status)}
-                          className="text-xs text-blue-400 hover:text-blue-300"
+                          className="text-xs text-accent hover:text-accent/80 font-medium transition-colors flex items-center gap-1"
                         >
-                          → {COLUMN_TITLES[nextStatus]}
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          {COLUMN_TITLES[nextStatus]}
                         </button>
                       ) : (
-                        <span className="text-xs text-green-500">Done</span>
+                        <span className="text-xs text-success/80 font-medium">Done</span>
                       )}
                       <button
                         onClick={() => handleDeleteTask(task.id)}
-                        className="text-xs text-gray-600 hover:text-red-400"
+                        className="text-xs text-text-subtle hover:text-error transition-colors"
                       >
                         Delete
                       </button>
@@ -275,7 +296,14 @@ const ProjectBoard: React.FC = () => {
                   </div>
                 ))}
                 {columnTasks.length === 0 && (
-                  <p className="text-xs text-gray-600 text-center py-6">No tasks</p>
+                  <div className="empty-state border-2 border-dashed border-border-subtle/40 rounded-lg">
+                    <div className="empty-icon">
+                      <svg className="w-4 h-4 text-text-subtle/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </div>
+                    <p className="empty-text">No tasks</p>
+                  </div>
                 )}
               </div>
             </div>

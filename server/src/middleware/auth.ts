@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../utils/auth';
 
 export interface AuthRequest extends Request {
-  user?: { id: string; name: string; email: string };
+  user?: { id: string; name: string; email: string; avatar?: string };
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
