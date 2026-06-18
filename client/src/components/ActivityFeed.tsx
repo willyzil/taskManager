@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { io } from 'socket.io-client';
+import { useSocket } from '../contexts/SocketContext';
+import { api } from '../api';
 
 interface ActivityItem {
   id: string;
@@ -58,56 +59,28 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ projectId, onNewActivity })
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState(20);
   const { user } = useAuth();
-  const socketRef = useRef<any>(null);
+  const { socket } = useSocket();
 
   useEffect(() => {
-    // Initialize socket
-    socketRef.current = io();
-    socketRef.current.on('connect', () => {
-      console.log('Socket connected');
-    });
-
-    // Join project room
-    if (projectId) {
-      socketRef.current?.join(`project:${projectId}`);
-    }
-
-    // Listen for activity events
-    socketRef.current?.on('activity:new', (activity: ActivityItem) => {
-      if (onNewActivity) {
-        onNewActivity(activity);
-      }
-      setActivities(prev => [activity, ...prev]);
-    });
-
-    return () => {
-      socketRef.current?.disconnect();
+    if (!socket) return;
+    const handler = (activity: ActivityItem) => {
+      if (onNewActivity) onNewActivity(activity);
+      setActivities(prev => [{ ...activity, createdAt: new Date(activity.createdAt) }, ...prev]);
     };
-  }, [projectId, onNewActivity]);
-
-  const fetchActivities = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/activity?limit=${limit}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        const formattedActivities = data.logs.map((log: any) => ({
-          ...log,
-          createdAt: new Date(log.createdAt),
-        }));
-        setActivities(formattedActivities);
-      } else {
-      }
-    } catch (err) {
-      console.error('Error fetching activities:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    socket.on('activity:new', handler);
+    return () => { socket.off('activity:new', handler); };
+  }, [socket, onNewActivity]);
 
   useEffect(() => {
-    fetchActivities();
+    setLoading(true);
+    api.get(`/api/activity?limit=${limit}`)
+      .then(data => {
+        if (data.success) {
+          setActivities(data.logs.map((log: any) => ({ ...log, createdAt: new Date(log.createdAt) })));
+        }
+      })
+      .catch(err => console.error('Error fetching activities:', err))
+      .finally(() => setLoading(false));
   }, [limit, projectId]);
 
   const getUserAvatar = (userName: string, avatar: string | null): string => {

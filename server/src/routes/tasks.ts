@@ -130,7 +130,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
     const task = await prisma.task.findUnique({
       where: { id },
       include: {
-        project: { select: { id: true, name: true } },
+        project: { select: { id: true, name: true, ownerId: true } },
         assignee: { select: { id: true, name: true } },
       },
     });
@@ -175,7 +175,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
       metadata: activityMetadata,
     });
 
-    // Emit real-time activity event
+    // Emit real-time activity to every project member's user room
     const activityData = {
       action: activityAction,
       taskId: updatedTask.id,
@@ -187,9 +187,19 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
       userAvatar: req.user?.avatar,
       projectId: task.projectId,
       projectName: task.project.name,
+      createdAt: new Date(),
     };
-    
-    getIo().to(`project:${task.projectId}`).emit('activity:new', activityData);
+
+    const memberships = await prisma.projectMember.findMany({
+      where: { projectId: task.projectId },
+      select: { userId: true },
+    });
+    const recipientIds = new Set([
+      task.project.ownerId,
+      ...memberships.map(m => m.userId),
+    ]);
+    const io = getIo();
+    recipientIds.forEach(uid => io.to(`user:${uid}`).emit('activity:new', activityData));
 
     res.json({ success: true, task: updatedTask });
   } catch (error) {

@@ -20,13 +20,6 @@ export function initSocket(server: HttpServer): Server {
 
     socket.on('join', (userId: string) => {
       socket.join(`user:${userId}`);
-      socket.join(`project:${userId}`);
-    });
-
-    // Listen for activity:new events and broadcast to project rooms
-    socket.on('activity:new', (data: { projectId: string; activity: any }) => {
-      const { projectId, activity } = data;
-      getIo().to(`project:${projectId}`).emit('activity:new', activity);
     });
 
     socket.on('disconnect', () => {

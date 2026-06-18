@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { io as socketIO, Socket } from 'socket.io-client';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import { api } from '../api';
 
 interface Notification {
@@ -15,30 +15,27 @@ interface Notification {
 
 const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
+  const { socket } = useSocket();
   const location = useLocation();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showPanel, setShowPanel] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const isActive = (path: string) => location.pathname === path;
 
   useEffect(() => {
     if (!user) return;
-
     api.get('/api/notifications').then(data => {
       if (data.success) setNotifications(data.notifications);
     });
-
-    const socket = socketIO({ path: '/socket.io', transports: ['websocket', 'polling'] });
-    socketRef.current = socket;
-    socket.on('connect', () => socket.emit('join', user.id));
-    socket.on('notification', (n: Notification) => {
-      setNotifications(prev => [n, ...prev]);
-    });
-
-    return () => { socket.disconnect(); };
   }, [user]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (n: Notification) => setNotifications(prev => [n, ...prev]);
+    socket.on('notification', handler);
+    return () => { socket.off('notification', handler); };
+  }, [socket]);
 
   const markRead = async (id: string) => {
     await api.patch(`/api/notifications/${id}/read`, {});

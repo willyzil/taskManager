@@ -5,6 +5,7 @@ import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import ProjectBoard from './components/ProjectBoard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SocketProvider } from './contexts/SocketContext';
 import Sidebar from './components/Sidebar';
 
 const AUTH_PATHS = ['/login', '/register'];
@@ -53,7 +54,9 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <Layout />
+        <SocketProvider>
+          <Layout />
+        </SocketProvider>
       </Router>
     </AuthProvider>
   );
