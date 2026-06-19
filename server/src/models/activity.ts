@@ -3,7 +3,7 @@ import { prisma } from '../db';
 export interface CreateActivityLogInput {
   projectId: string;
   userId: string;
-  action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
+  action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
   entityId?: string;
   metadata?: Record<string, any>;
 }

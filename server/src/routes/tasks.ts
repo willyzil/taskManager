@@ -124,8 +124,9 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res) => {
 // PATCH /api/tasks/:id
 router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
+    console.log('PATCH request received:', { id: req.params.id, body: req.body, userId: req.user?.id });
     const { id } = req.params;
-    const { title, description, priority, dueDate, assigneeId } = req.body;
+    const { title, description, priority, dueDate, assigneeId, status } = req.body;
 
     const task = await prisma.task.findUnique({
       where: { id },
@@ -148,23 +149,27 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
         priority: priority !== undefined ? priority : task.priority,
         dueDate: dueDate !== undefined ? new Date(dueDate) : task.dueDate,
         ...(assigneeId !== undefined && { assigneeId }),
+        ...(status !== undefined && { status }),
       },
       include: taskInclude,
     });
 
     // Log activity
-    const activityAction = assigneeId 
-      ? 'TASK_ASSIGNED'
-      : priority !== undefined && priority !== task.priority ? 'TASK_UPDATED' :
-        dueDate !== undefined ? 'TASK_UPDATED' :
-        title !== undefined ? 'TASK_UPDATED' :
-        description !== undefined ? 'TASK_UPDATED' :
-        'TASK_UPDATED';
-    
+    const activityAction = status
+      ? 'TASK_STATUS_CHANGED'
+      : assigneeId
+        ? 'TASK_ASSIGNED'
+        : priority !== undefined && priority !== task.priority ? 'TASK_UPDATED'
+          : dueDate !== undefined ? 'TASK_UPDATED'
+            : title !== undefined ? 'TASK_UPDATED'
+              : description !== undefined ? 'TASK_UPDATED'
+                : 'TASK_UPDATED';
+
     const activityMetadata: Record<string, any> = {
       title: updatedTask.title,
       ...(priority !== undefined && priority !== task.priority && { priority: updatedTask.priority }),
       ...(assigneeId !== undefined && assigneeId !== task.assigneeId && { assignee: updatedTask.assignee?.name }),
+      ...(status !== undefined && status !== task.status && { status: updatedTask.status }),
     };
 
     await createActivityLog({
@@ -181,6 +186,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
       taskId: updatedTask.id,
       title: updatedTask.title,
       priority: activityMetadata.priority || task.priority,
+      status: activityMetadata.status || task.status,
       assignee: activityMetadata.assignee || null,
       userId: req.user!.id,
       userName: req.user?.name,
@@ -198,6 +204,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
       task.project.ownerId,
       ...memberships.map(m => m.userId),
     ]);
+    console.log('Emitting activity to users:', Array.from(recipientIds));
     const io = getIo();
     recipientIds.forEach(uid => io.to(`user:${uid}`).emit('activity:new', activityData));
 
@@ -211,6 +218,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
 // DELETE /api/tasks/:id
 router.delete('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
+    console.log('DELETE request for task:', req.params.id);
     const { id } = req.params;
 
     const task = await prisma.task.findUnique({

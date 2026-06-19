@@ -88,7 +88,20 @@ const ProjectBoard: React.FC = () => {
     const nextStatus = STATUS_ORDER[idx + 1];
     const data = await api.patch(`/api/tasks/${taskId}`, { status: nextStatus });
     if (data.success) {
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: nextStatus } : t));
+      console.log('Task status changed to:', nextStatus);
+      console.log('Re-fetching tasks...');
+      const tasksData = await api.get(`/api/tasks?projectId=${id}`);
+      if (tasksData.success) {
+        console.log('Fetched tasks:', tasksData.tasks);
+        console.log('Setting tasks state...');
+        // Force new array reference to trigger re-render
+        setTasks([...tasksData.tasks]);
+        console.log('Tasks state updated');
+      } else {
+        console.error('Failed to fetch tasks');
+      }
+    } else {
+      console.error('Failed to update task:', data.message);
     }
   };
 
