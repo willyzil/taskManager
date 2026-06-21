@@ -26,6 +26,8 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   'TASK_UPDATED': 'updated a task',
   'TASK_MOVED': 'moved a task',
   'TASK_ASSIGNED': 'assigned a task',
+  'TASK_STATUS_CHANGED': 'changed task status',
+  'TASK_DELETED': 'deleted a task',
   'COMMENT_ADDED': 'added a comment',
   'PROJECT_CREATED': 'created a project',
   'PROJECT_UPDATED': 'updated a project',
@@ -76,7 +78,16 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ projectId, onNewActivity })
     api.get(`/api/activity?limit=${limit}`)
       .then(data => {
         if (data.success) {
-          setActivities(data.logs.map((log: any) => ({ ...log, createdAt: new Date(log.createdAt) })));
+          const newLogs: ActivityItem[] = data.logs.map((log: any) => ({ ...log, createdAt: new Date(log.createdAt) }));
+          if (limit > 20) {
+            setActivities(prev => {
+              const existingIds = new Set(prev.map(a => a.id));
+              const unique = newLogs.filter(a => !existingIds.has(a.id));
+              return [...prev, ...unique];
+            });
+          } else {
+            setActivities(newLogs);
+          }
         }
       })
       .catch(err => console.error('Error fetching activities:', err))

@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: taskmanager
       POSTGRES_USER: taskmanager
-      POSTGRES_PASSWORD: taskmanager_pass
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-taskmanager_secure_pass}
     volumes:
       - taskmanager_pgdata:/var/lib/postgresql/data
     ports:
@@ -31,7 +31,7 @@ services:
       - "5010:5001"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5010/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5001/"]
       interval: 30s
       timeout: 10s
       retries: 3

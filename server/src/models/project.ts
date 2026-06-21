@@ -137,6 +137,7 @@ export async function updateProject(id: string, input: UpdateProjectInput): Prom
 export async function deleteProject(id: string): Promise<boolean> {
   try {
     await prisma.$transaction([
+      prisma.activityLog.deleteMany({ where: { projectId: id } }),
       prisma.comment.deleteMany({ where: { task: { projectId: id } } }),
       prisma.task.deleteMany({ where: { projectId: id } }),
       prisma.projectMember.deleteMany({ where: { projectId: id } }),

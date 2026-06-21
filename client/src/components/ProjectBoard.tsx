@@ -19,6 +19,13 @@ const PRIORITY_COLORS: Record<string, string> = {
   URGENT: 'bg-red-600',
 };
 
+const PRIORITY_ORDER: Record<string, number> = {
+  URGENT: 4,
+  HIGH: 3,
+  MEDIUM: 2,
+  LOW: 1,
+};
+
 interface Member {
   id: string;
   name: string;
@@ -69,6 +76,11 @@ const ProjectBoard: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // Search & filter
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterPriority, setFilterPriority] = useState<string>('ALL');
+  const [filterAssignee, setFilterAssignee] = useState<string>('ALL');
+
   useEffect(() => {
     if (!id) return;
     Promise.all([
@@ -82,23 +94,39 @@ const ProjectBoard: React.FC = () => {
     }).finally(() => setLoading(false));
   }, [id]);
 
+  // Filter tasks based on search and filters
+  const filteredTasks = tasks.filter(task => {
+    // Search filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = task.title.toLowerCase().includes(q) ||
+        (task.description && task.description.toLowerCase().includes(q));
+      if (!matchesSearch) return false;
+    }
+    // Priority filter
+    if (filterPriority !== 'ALL' && task.priority !== filterPriority) return false;
+    // Assignee filter
+    if (filterAssignee !== 'ALL' && (!task.assignee || task.assignee.id !== filterAssignee)) return false;
+    return true;
+  });
+
+  // Sort: by priority descending, then by title
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    if (PRIORITY_ORDER[b.priority] !== PRIORITY_ORDER[a.priority]) {
+      return PRIORITY_ORDER[b.priority] - PRIORITY_ORDER[a.priority];
+    }
+    return a.title.localeCompare(b.title);
+  });
+
   const moveTask = async (taskId: string, currentStatus: Status) => {
     const idx = STATUS_ORDER.indexOf(currentStatus);
     if (idx === STATUS_ORDER.length - 1) return;
     const nextStatus = STATUS_ORDER[idx + 1];
     const data = await api.patch(`/api/tasks/${taskId}`, { status: nextStatus });
     if (data.success) {
-      console.log('Task status changed to:', nextStatus);
-      console.log('Re-fetching tasks...');
       const tasksData = await api.get(`/api/tasks?projectId=${id}`);
       if (tasksData.success) {
-        console.log('Fetched tasks:', tasksData.tasks);
-        console.log('Setting tasks state...');
-        // Force new array reference to trigger re-render
         setTasks([...tasksData.tasks]);
-        console.log('Tasks state updated');
-      } else {
-        console.error('Failed to fetch tasks');
       }
     } else {
       console.error('Failed to update task:', data.message);
@@ -199,7 +227,51 @@ const ProjectBoard: React.FC = () => {
             <p className="text-sm text-text-muted mt-1">{project.description}</p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          {/* Search input */}
+          <div className="relative">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search tasks..."
+              className="w-full sm:w-48 pl-9 pr-3 py-2 text-sm rounded-lg border border-border-subtle bg-[var(--card)] text-text placeholder-text-subtle/50 focus:outline-none focus:border-accent/50 transition-all-fast"
+            />
+          </div>
+          {/* Priority filter */}
+          <select
+            value={filterPriority}
+            onChange={e => setFilterPriority(e.target.value)}
+            className="w-full sm:w-auto px-3 py-2 text-sm rounded-lg border border-border-subtle bg-[var(--card)] text-text focus:outline-none focus:border-accent/50 transition-all-fast cursor-pointer"
+          >
+            <option value="ALL">All Priorities</option>
+            <option value="URGENT">Urgent</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+          {/* Assignee filter */}
+          <select
+            value={filterAssignee}
+            onChange={e => setFilterAssignee(e.target.value)}
+            className="w-full sm:w-auto px-3 py-2 text-sm rounded-lg border border-border-subtle bg-[var(--card)] text-text focus:outline-none focus:border-accent/50 transition-all-fast cursor-pointer"
+          >
+            <option value="ALL">All Assignees</option>
+            <option value="UNASSIGNED">Unassigned</option>
+            {members.filter(m => m.role === 'owner').map(m => (
+              <option key={m.id} value={m.id}>{m.name} (Owner)</option>
+            ))}
+            {members.filter(m => m.role !== 'owner').map(m => (
+              <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+            ))}
+          </select>
+          {/* Task count indicator */}
+          <div className="text-xs text-text-subtle bg-[var(--card)] border border-border-subtle rounded-lg px-2.5 py-1.5 whitespace-nowrap">
+            {sortedTasks.length} / {tasks.length} tasks
+          </div>
           {/* Member avatars - stacked */}
           <div className="flex items-center -space-x-2">
             {members.slice(0, 5).map(m => (
@@ -243,7 +315,7 @@ const ProjectBoard: React.FC = () => {
       {/* Kanban board */}
       <div className="flex space-x-4 overflow-x-auto pb-4">
         {STATUS_ORDER.map(status => {
-          const columnTasks = tasks.filter(t => t.status === status);
+          const columnTasks = sortedTasks.filter(t => t.status === status);
           const nextStatus = STATUS_ORDER[STATUS_ORDER.indexOf(status) + 1];
           const colClass = {
             TODO: 'kanban-todo',

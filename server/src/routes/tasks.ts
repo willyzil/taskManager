@@ -418,13 +418,44 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res) => {
 
     const task = await prisma.task.findUnique({
       where: { id },
-      include: { project: { select: { id: true } } },
+      include: { project: { select: { id: true, name: true, ownerId: true } } },
     });
 
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
 
     const isProjectMember = await isMember(req.user!.id, task.projectId);
     if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    // Emit activity before deleting
+    const activityData = {
+      action: 'TASK_DELETED',
+      taskId: task.id,
+      title: task.title,
+      userId: req.user!.id,
+      userName: req.user?.name,
+      userAvatar: req.user?.avatar,
+      projectId: task.projectId,
+      projectName: task.project.name,
+      createdAt: new Date(),
+    };
+
+    await prisma.activityLog.create({
+      data: {
+        projectId: task.projectId,
+        userId: req.user!.id,
+        action: 'TASK_DELETED',
+        entityId: task.id,
+        metadata: { title: task.title },
+      },
+    });
+
+    const memberships = await prisma.projectMember.findMany({
+      where: { projectId: task.projectId },
+      select: { userId: true },
+    });
+    const recipientIds = new Set([task.project.ownerId, ...memberships.map(m => m.userId)]);
+    const io = getIo();
+    recipientIds.forEach(uid => io.to(`user:${uid}`).emit('activity:new', activityData));
 
     await prisma.task.delete({ where: { id } });
     res.json({ success: true, message: 'Task deleted successfully' });

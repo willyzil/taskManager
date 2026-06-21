@@ -4,7 +4,7 @@ export interface ActivityLog {
   id: string;
   projectId: string;
   userId: string;
-  action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
+  action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'TASK_DELETED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
   entityId?: string;
   metadata: unknown;
   createdAt: Date;
@@ -15,7 +15,7 @@ export interface ActivityLog {
 export interface CreateActivityLogInput {
   projectId: string;
   userId: string;
-  action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
+  action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'TASK_DELETED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
   entityId?: string;
   metadata: Record<string, unknown> | null;
 }

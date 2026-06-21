@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
 import { createServer } from 'http';
 import { connect } from './db';
 import { initSocket } from './socket';
@@ -18,19 +19,41 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT || '5001', 10);
 
-// General rate limiter: 30 requests per minute
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },
+}));
+
+// General rate limiter: 60 requests per minute
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 30,
+  max: 60,
   message: { success: false, message: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Strict rate limiter for auth endpoints: 5 requests per minute
+// Auth rate limiter: 10 requests per 15 minutes (prevents brute force without locking out)
 const authLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 5,
+  windowMs: 15 * 60 * 1000,
+  max: 10,
   message: { success: false, message: 'Too many authentication attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,

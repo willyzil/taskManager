@@ -49,6 +49,9 @@ router.post('/', requireAuth, async (req: AuthRequest, res) => {
 
     if (!invitedUser) return res.status(404).json({ success: false, message: 'No user found with that email' });
     if (!project) return res.status(404).json({ success: false, message: 'Project not found' });
+    if (project.ownerId !== req.user!.id) {
+      return res.status(403).json({ success: false, message: 'Only the project owner can invite members' });
+    }
     if (project.ownerId === invitedUser.id) {
       return res.status(400).json({ success: false, message: 'That user is already the project owner' });
     }

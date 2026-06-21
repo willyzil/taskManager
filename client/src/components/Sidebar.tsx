@@ -32,7 +32,12 @@ const Sidebar: React.FC<{ mobileOpen?: boolean }> = ({ mobileOpen = false }) => 
 
   useEffect(() => {
     if (!socket) return;
-    const handler = (n: Notification) => setNotifications(prev => [n, ...prev]);
+    const handler = (n: Notification) =>
+      setNotifications(prev => {
+        // Only add if not already present (prevents duplicates)
+        if (prev.find(p => p.id === n.id)) return prev;
+        return [n, ...prev];
+      });
     socket.on('notification', handler);
     return () => { socket.off('notification', handler); };
   }, [socket]);

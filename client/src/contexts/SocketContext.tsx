@@ -12,8 +12,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const { user } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
+
     if (!user) {
       socketRef.current?.disconnect();
       socketRef.current = null;
@@ -21,12 +24,21 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
+    // Disconnect any previous socket before creating a new one
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
     const s = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
     socketRef.current = s;
     s.on('connect', () => s.emit('join', user.id));
-    setSocket(s);
+    
+    if (mountedRef.current) {
+      setSocket(s);
+    }
 
     return () => {
+      mountedRef.current = false;
       s.disconnect();
       socketRef.current = null;
       setSocket(null);
