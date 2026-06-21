@@ -2,6 +2,7 @@ import express from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { prisma } from '../db';
 import { getIo } from '../socket';
+import { ActivityLog } from '../models/activity';
 
 const router = express.Router();
 
@@ -46,7 +47,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
     });
 
     // Format response with user and project names
-    const formattedLogs = activityLogs.map(log => ({
+    const formattedLogs: ActivityLog[] = activityLogs.map(log => ({
       id: log.id,
       action: log.action,
       projectId: log.projectId,

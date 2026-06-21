@@ -2,46 +2,50 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:14
+    image: postgres:15-alpine
     environment:
       POSTGRES_DB: taskmanager
       POSTGRES_USER: taskmanager
-      POSTGRES_PASSWORD: taskmanager
+      POSTGRES_PASSWORD: taskmanager_pass
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - taskmanager_pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
-
-  redis:
-    image: redis:6
-    ports:
-      - "6379:6379"
+      - "5434:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskmanager -d taskmanager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   server:
-    build: 
+    build:
       context: ./server
       dockerfile: Dockerfile
     depends_on:
-      - postgres
-      - redis
-    environment:
-      - DATABASE_URL=postgresql://taskmanager:taskmanager@postgres:5432/taskmanager?schema=public
-      - REDIS_URL=redis://redis:6379
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./server/.env.docker
     ports:
-      - "5000:5000"
-    volumes:
-      - ./server/src:/app/src
+      - "5010:5001"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5010/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   client:
     build:
       context: ./client
       dockerfile: Dockerfile
     depends_on:
-      - server
+      server:
+        condition: service_started
     ports:
-      - "3000:3000"
+      - "3010:80"
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  taskmanager_pgdata:

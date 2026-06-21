@@ -59,10 +59,10 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-6 flex gap-6 min-h-screen bg-[var(--background)] text-text">
+    <div className="p-6 flex flex-col lg:flex-row gap-6 min-h-screen bg-[var(--background)] text-text dashboard-main">
       {/* Projects section - left 2/3 */}
       <div className="flex-1">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-6 dashboard-header">
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
           <button
             onClick={() => setShowModal(true)}
@@ -88,10 +88,10 @@ const Dashboard: React.FC = () => {
             <p className="text-sm">Click "New Project" to get started</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 projects-grid">
             {projects.map(project => (
-              <div key={project.id} className="bg-[var(--card)] border border-border-subtle rounded-xl p-5 transition-all-fast hover:shadow-xl hover:-translate-y-1 hover:border-accent/30 group cursor-pointer">
-                <div className="flex justify-between items-start mb-3">
+              <div key={project.id} className="bg-[var(--card)] border border-border-subtle rounded-xl p-5 transition-all-fast hover:shadow-xl hover:-translate-y-1 hover:border-accent/30 group cursor-pointer project-card">
+                <div className="flex justify-between items-start mb-3 project-header">
                   <h2 className="text-xl font-bold tracking-tight group-hover:text-white transition-colors">{project.name}</h2>
                   {project.ownerId === user?.id && (
                     <button
@@ -126,7 +126,7 @@ const Dashboard: React.FC = () => {
 
         {/* New Project modal */}
         {showModal && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100]">
             <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 w-full max-w-md">
               <h2 className="text-xl font-semibold mb-4">New Project</h2>
               {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
@@ -176,7 +176,7 @@ const Dashboard: React.FC = () => {
 
         {/* Delete confirmation modal */}
         {confirmDelete && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100]">
             <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 w-full max-w-sm">
               <h2 className="text-lg font-semibold mb-2">Delete Project</h2>
               <p className="text-gray-400 text-sm mb-1">
@@ -206,8 +206,8 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Activity Feed - right 1/3 */}
-      <div className="w-[350px]">
+      {/* Activity Feed - right 1/3, stacks below on mobile */}
+      <div className="w-full lg:w-[350px] mt-6 lg:mt-0 dashboard-activity">
         <ActivityFeed />
       </div>
     </div>

@@ -30,6 +30,7 @@ export async function createUser(input: CreateUserInput): Promise<User | null> {
         email: input.email,
         password: hashedPassword,
       },
+      select: { id: true, name: true, email: true, avatar: true, createdAt: true },
     });
     
     return {
@@ -37,7 +38,6 @@ export async function createUser(input: CreateUserInput): Promise<User | null> {
       name: user.name,
       email: user.email,
       avatar: user.avatar ?? undefined,
-      password: user.password,
       createdAt: user.createdAt,
     };
   } catch (error) {
@@ -49,9 +49,7 @@ export async function createUser(input: CreateUserInput): Promise<User | null> {
 export async function findUserByEmail(email: string): Promise<User | null> {
   try {
     const user = await prisma.user.findUnique({
-      where: {
-        email,
-      },
+      where: { email },
     });
     
     if (!user) return null;
@@ -73,9 +71,8 @@ export async function findUserByEmail(email: string): Promise<User | null> {
 export async function findUserById(id: string): Promise<User | null> {
   try {
     const user = await prisma.user.findUnique({
-      where: {
-        id,
-      },
+      where: { id },
+      select: { id: true, name: true, email: true, avatar: true, createdAt: true },
     });
     
     if (!user) return null;
@@ -85,7 +82,6 @@ export async function findUserById(id: string): Promise<User | null> {
       name: user.name,
       email: user.email,
       avatar: user.avatar ?? undefined,
-      password: user.password,
       createdAt: user.createdAt,
     };
   } catch (error) {

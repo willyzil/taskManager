@@ -11,24 +11,43 @@ import memberRoutes from './routes/members';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
 import activityRoutes from './routes/activity';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5001', 10);
 
+// General rate limiter: 30 requests per minute
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { success: false, message: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Strict rate limiter for auth endpoints: 5 requests per minute
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { success: false, message: 'Too many authentication attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use(cors());
 app.use(express.json());
 
 connect();
 
-app.use('/api/auth', authRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/projects/:projectId/members', memberRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/activity', activityRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/projects', generalLimiter, projectRoutes);
+app.use('/api/projects/:projectId/members', generalLimiter, memberRoutes);
+app.use('/api/tasks', generalLimiter, taskRoutes);
+app.use('/api/notifications', generalLimiter, notificationRoutes);
+app.use('/api/users', generalLimiter, userRoutes);
+app.use('/api/activity', generalLimiter, activityRoutes);
 
 app.get('/', (_req: Request, res: Response) => {
   res.json({ message: 'Task Manager API is running on port ' + PORT });

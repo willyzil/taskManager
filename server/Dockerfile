@@ -1,12 +1,18 @@
-FROM node:18
+FROM node:18-alpine
 
 WORKDIR /app
+
+# Install openssl for Prisma
+RUN apk add --no-cache openssl
 
 COPY package*.json ./
 RUN npm ci --only=production
 
-COPY . .
+COPY prisma ./prisma/
+RUN npx prisma generate
 
-EXPOSE 5000
+COPY dist ./dist/
 
-CMD ["npm", "run", "dev"]
+EXPOSE 5001
+
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]

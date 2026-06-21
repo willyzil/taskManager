@@ -182,9 +182,9 @@ const ProjectBoard: React.FC = () => {
 
   return (
     <div className="p-6 min-h-screen bg-[var(--background)] text-text">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-6">
-        <div>
+      {/* Header - stacks on mobile */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-4 mb-6">
+        <div className="flex-1">
           <button
             onClick={() => navigate('/dashboard')}
             className="text-text-subtle hover:text-accent transition-colors mb-2 block flex items-center gap-2"
@@ -199,7 +199,7 @@ const ProjectBoard: React.FC = () => {
             <p className="text-sm text-text-muted mt-1">{project.description}</p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {/* Member avatars - stacked */}
           <div className="flex items-center -space-x-2">
             {members.slice(0, 5).map(m => (
@@ -224,7 +224,8 @@ const ProjectBoard: React.FC = () => {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Invite
+            <span className="hidden sm:inline">Invite</span>
+            <span className="sm:hidden">+</span>
           </button>
           <button
             onClick={() => setShowAddTask(true)}
@@ -233,7 +234,8 @@ const ProjectBoard: React.FC = () => {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Add Task
+            <span className="hidden sm:inline">Add Task</span>
+            <span className="sm:hidden">+</span>
           </button>
         </div>
       </div>

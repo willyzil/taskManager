@@ -1,11 +1,23 @@
 import { prisma } from '../db';
 
+export interface ActivityLog {
+  id: string;
+  projectId: string;
+  userId: string;
+  action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
+  entityId?: string;
+  metadata: unknown;
+  createdAt: Date;
+  user?: { id: string; name: string; avatar?: string | null };
+  project?: { id: string; name: string };
+}
+
 export interface CreateActivityLogInput {
   projectId: string;
   userId: string;
   action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
   entityId?: string;
-  metadata?: Record<string, any>;
+  metadata: Record<string, unknown> | null;
 }
 
 export async function createActivityLog(input: CreateActivityLogInput): Promise<void> {
@@ -16,7 +28,7 @@ export async function createActivityLog(input: CreateActivityLogInput): Promise<
         userId: input.userId,
         action: input.action,
         entityId: input.entityId || null,
-        metadata: input.metadata || null,
+        metadata: input.metadata as any,
       },
     });
   } catch (error) {
@@ -25,9 +37,9 @@ export async function createActivityLog(input: CreateActivityLogInput): Promise<
   }
 }
 
-export async function getActivityLogs(projectId?: string, userId?: string, limit = 20): Promise<any[]> {
+export async function getActivityLogs(projectId?: string, userId?: string, limit = 20): Promise<ActivityLog[]> {
   try {
-    const where: any = {};
+    const where: Record<string, unknown> = {};
     if (projectId) where.projectId = projectId;
     if (userId) where.userId = userId;
 

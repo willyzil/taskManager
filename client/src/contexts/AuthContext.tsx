@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { setOnUnauthorized } from './api';
+import { setOnUnauthorized } from '../api';
 
 interface User {
   id: string;
