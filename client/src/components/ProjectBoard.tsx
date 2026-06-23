@@ -92,8 +92,7 @@ const ProjectBoard: React.FC = () => {
   // Drag-and-drop state for tasks
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
-  const dragItemRef = useRef<number | null>(null);
-  const dragOverItemRef = useRef<number | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null);
 
   // Subtask state
   const [addingSubtaskId, setAddingSubtaskId] = useState<string | null>(null);
@@ -153,68 +152,102 @@ const ProjectBoard: React.FC = () => {
     }
   };
 
+  // Drag-and-drop: find insertion point based on Y coordinate
+  const findInsertIndex = (e: React.DragEvent, statusTasks: Task[]) => {
+    const newY = e.clientY;
+    // Check each task card's bounding rect
+    for (let i = 0; i < statusTasks.length; i++) {
+      const element = document.querySelector(`[data-task-id="${statusTasks[i].id}"]`);
+      if (element) {
+        const rect = element.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (newY < midY) return i;
+      }
+    }
+    return statusTasks.length;
+  };
+
   // Drag-and-drop: task moved to a different column
-  const onTaskDrop = async (taskId: string, targetStatus: Status) => {
+  const onTaskDrop = async (e: React.DragEvent, targetStatus: Status) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const taskId = draggedTaskId;
+    if (!taskId) return;
+
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
     const currentStatus = task.status;
-    if (currentStatus === targetStatus) return; // Stay in same column, handled below
-    if (targetStatus === STATUS_ORDER[0]) {
-      // Moving to TODO: move backward
-      const idx = STATUS_ORDER.indexOf(currentStatus);
-      if (idx > 0) {
-        const prevStatus = STATUS_ORDER[idx - 1];
-        await api.patch(`/api/tasks/${taskId}`, { status: prevStatus });
+
+    const statusTasks = sortedTasks.filter(t => t.status === targetStatus);
+    const insertIndex = findInsertIndex(e, statusTasks);
+
+    // Same column reorder
+    if (currentStatus === targetStatus) {
+      if (statusTasks.length < 2) {
+        setDraggedTaskId(null);
+        setDragOverTaskId(null);
+        setDragOverStatus(null);
+            return;
+      }
+
+      const fromIndex = statusTasks.findIndex(t => t.id === taskId);
+      if (fromIndex === insertIndex) {
+        setDraggedTaskId(null);
+        setDragOverTaskId(null);
+        setDragOverStatus(null);
+            return;
+      }
+
+      const newOrder = [...statusTasks];
+      const [movedTask] = newOrder.splice(fromIndex, 1);
+      newOrder.splice(insertIndex, 0, movedTask);
+
+      try {
+        await api.post(`/api/tasks/reorder`, {
+          projectId: id,
+          status: targetStatus,
+          taskOrder: newOrder.map((t, i) => ({ id: t.id, order: i })),
+        });
         const tasksData = await api.get(`/api/tasks?projectId=${id}`);
         if (tasksData.success) setTasks([...tasksData.tasks]);
+      } catch (err) {
+        console.error('Failed to reorder tasks:', err);
       }
-    } else {
-      await moveTask(taskId, currentStatus);
     }
+    // Different column drop
+    else {
+      if (targetStatus === STATUS_ORDER[0]) {
+        // Moving to TODO: move backward
+        const idx = STATUS_ORDER.indexOf(currentStatus);
+        if (idx > 0) {
+          const prevStatus = STATUS_ORDER[idx - 1];
+          await api.patch(`/api/tasks/${taskId}`, { status: prevStatus });
+          const tasksData = await api.get(`/api/tasks?projectId=${id}`);
+          if (tasksData.success) setTasks([...tasksData.tasks]);
+        }
+      } else {
+        await moveTask(taskId, currentStatus);
+      }
+      // Also reorder in new column
+      if (statusTasks.length > 0) {
+        const newOrder = [...statusTasks];
+        // Insert moved task at the right position
+        newOrder.splice(insertIndex, 0, task);
+        try {
+          await api.post(`/api/tasks/reorder`, {
+            projectId: id,
+            status: targetStatus,
+            taskOrder: newOrder.map((t, i) => ({ id: t.id, order: i })),
+          });
+        } catch (err) {
+          console.error('Failed to reorder in new column:', err);
+        }
+      }
+    }
+
     setDraggedTaskId(null);
     setDragOverTaskId(null);
-  };
-
-  // Drag-and-drop: reorder tasks within a column
-  const handleTaskDrop = async (e: React.DragEvent, status: Status) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (dragItemRef.current === null || dragOverItemRef.current === null) return;
-
-    const statusTasks = sortedTasks.filter(t => t.status === status);
-    if (statusTasks.length < 2) {
-      dragItemRef.current = null;
-      dragOverItemRef.current = null;
-      return;
-    }
-
-    const fromIndex = dragItemRef.current;
-    const toIndex = dragOverItemRef.current;
-    if (fromIndex === toIndex) {
-      dragItemRef.current = null;
-      dragOverItemRef.current = null;
-      return;
-    }
-
-    const newOrder = [...statusTasks];
-    const [movedTask] = newOrder.splice(fromIndex, 1);
-    newOrder.splice(toIndex, 0, movedTask);
-
-    // Update order in backend
-    try {
-      await api.post(`/api/tasks/reorder`, {
-        projectId: id,
-        status,
-        taskOrder: newOrder.map((t, i) => ({ id: t.id, order: i })),
-      });
-      const tasksData = await api.get(`/api/tasks?projectId=${id}`);
-      if (tasksData.success) setTasks([...tasksData.tasks]);
-    } catch (err) {
-      console.error('Failed to reorder tasks:', err);
-    }
-
-    dragItemRef.current = null;
-    dragOverItemRef.current = null;
+    setDragOverStatus(null);
   };
 
   const handleAddTask = async (e: React.FormEvent) => {
@@ -523,11 +556,15 @@ const ProjectBoard: React.FC = () => {
               className={`flex-shrink-0 w-72 bg-[var(--card)]/50 backdrop-blur-sm rounded-xl border border-border-subtle/50 ${colClass}`}
               onDragOver={(e) => {
                 e.preventDefault();
+                if (draggedTaskId) setDragOverStatus(status);
+              }}
+              onDragLeave={() => {
+                setDragOverStatus(null);
               }}
               onDrop={(e) => {
                 e.preventDefault();
                 if (draggedTaskId) {
-                  onTaskDrop(draggedTaskId, status);
+                  onTaskDrop(e, status);
                 }
               }}
             >
@@ -538,37 +575,34 @@ const ProjectBoard: React.FC = () => {
                 </span>
               </div>
               <div className="p-2.5 space-y-2.5 min-h-[80px]">
-                {columnTasks.map((task, index) => (
+                {columnTasks.map(task => (
                   <div
                     key={task.id}
+                    data-task-id={task.id}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', task.id);
                       setDraggedTaskId(task.id);
-                      dragItemRef.current = index;
+                      setDragOverTaskId(null);
                     }}
                     onDragEnd={() => {
                       setDraggedTaskId(null);
-                      dragItemRef.current = null;
-                      dragOverItemRef.current = null;
+                      setDragOverTaskId(null);
+                      setDragOverStatus(null);
                     }}
                     onDragOver={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      dragOverItemRef.current = index;
                       setDragOverTaskId(task.id);
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (dragOverTaskId === task.id) {
-                        handleTaskDrop(e, status);
-                      } else {
-                        onTaskDrop(draggedTaskId!, status);
+                      if (draggedTaskId && draggedTaskId === task.id) return;
+                      if (draggedTaskId) {
+                        onTaskDrop(e, status);
                       }
-                      dragItemRef.current = null;
-                      dragOverItemRef.current = null;
-                      setDragOverTaskId(null);
                     }}
                     className={`bg-[var(--card)] border border-border-subtle/50 rounded-lg p-3.5 hover:border-accent/20 hover:-translate-y-0.5 transition-all-fast cursor-grab group shadow-sm hover:shadow-md ${
                       draggedTaskId === task.id ? 'opacity-40 scale-95' : ''
@@ -818,7 +852,7 @@ const ProjectBoard: React.FC = () => {
                 ))}
                 {columnTasks.length === 0 && (
                   <div className="text-center py-6 text-text-muted/50 text-xs">
-                    Drag tasks here
+                    {dragOverStatus === status ? 'Drop here' : 'No tasks'}
                   </div>
                 )}
               </div>
