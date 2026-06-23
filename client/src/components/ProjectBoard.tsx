@@ -546,22 +546,21 @@ const ProjectBoard: React.FC = () => {
               }}
               onDrop={(e) => {
                 e.preventDefault();
-                if (draggedTaskId) {
-                  // Determine insertion index based on Y position
-                  const y = e.clientY;
-                  let insertIndex = columnTasks.length;
-                  for (let i = 0; i < columnTasks.length; i++) {
-                    const el = document.querySelector(`[data-task-id="${columnTasks[i].id}"]`);
-                    if (el) {
-                      const rect = el.getBoundingClientRect();
-                      if (y < rect.top + rect.height / 2) {
-                        insertIndex = i;
-                        break;
-                      }
+                if (!draggedTaskId) return;
+                // Determine insertion index based on Y position
+                const y = e.clientY;
+                let insertIndex = columnTasks.length;
+                for (let i = 0; i < columnTasks.length; i++) {
+                  const el = document.querySelector(`[data-task-id="${columnTasks[i].id}"]`);
+                  if (el) {
+                    const rect = el.getBoundingClientRect();
+                    if (y < rect.top + rect.height / 2) {
+                      insertIndex = i;
+                      break;
                     }
                   }
-                  handleColumnDrop(status, insertIndex);
                 }
+                handleColumnDrop(status, insertIndex);
               }}
             >
               <div className="p-3 border-b border-border-subtle/50 flex items-center gap-2">
@@ -578,9 +577,7 @@ const ProjectBoard: React.FC = () => {
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = 'move';
-                      e.dataTransfer.setData('text/plain', task.id);
                       setDraggedTaskId(task.id);
-                      setDragOverTaskId(null);
                     }}
                     onDragEnd={() => {
                       setDraggedTaskId(null);
@@ -589,13 +586,7 @@ const ProjectBoard: React.FC = () => {
                     }}
                     onDragOver={(e) => {
                       e.preventDefault();
-                      e.stopPropagation();
                       setDragOverTaskId(task.id);
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // Let the column handle the actual drop
                     }}
                     className={`bg-[var(--card)] border border-border-subtle/50 rounded-lg p-3.5 hover:border-accent/20 hover:-translate-y-0.5 transition-all-fast cursor-grab group shadow-sm hover:shadow-md ${
                       draggedTaskId === task.id ? 'opacity-40 scale-95' : ''
