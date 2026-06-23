@@ -12,6 +12,7 @@ import memberRoutes from './routes/members';
 import notificationRoutes from './routes/notifications';
 import userRoutes from './routes/users';
 import activityRoutes from './routes/activity';
+import tagRoutes from './routes/tags';
 import rateLimit from 'express-rate-limit';
 
 dotenv.config();
@@ -67,6 +68,7 @@ connect();
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/projects', generalLimiter, projectRoutes);
 app.use('/api/projects/:projectId/members', generalLimiter, memberRoutes);
+app.use('/api/projects/:projectId/tags', generalLimiter, tagRoutes);
 app.use('/api/tasks', generalLimiter, taskRoutes);
 app.use('/api/notifications', generalLimiter, notificationRoutes);
 app.use('/api/users', generalLimiter, userRoutes);

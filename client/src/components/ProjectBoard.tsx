@@ -26,6 +26,13 @@ const PRIORITY_ORDER: Record<string, number> = {
   LOW: 1,
 };
 
+interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  order: number;
+}
+
 interface Member {
   id: string;
   name: string;
@@ -41,6 +48,7 @@ interface Task {
   priority: string;
   dueDate: string | null;
   assignee: { id: string; name: string } | null;
+  subtasks?: Subtask[];
 }
 
 interface Project {
@@ -81,6 +89,21 @@ const ProjectBoard: React.FC = () => {
   const [filterPriority, setFilterPriority] = useState<string>('ALL');
   const [filterAssignee, setFilterAssignee] = useState<string>('ALL');
 
+  // Drag-and-drop state for tasks
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+  const dragItemRef = useRef<number | null>(null);
+  const dragOverItemRef = useRef<number | null>(null);
+
+  // Subtask state
+  const [addingSubtaskId, setAddingSubtaskId] = useState<string | null>(null);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const subtaskDragItemRef = useRef<number | null>(null);
+  const subtaskDragOverItemRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!id) return;
     Promise.all([
@@ -96,16 +119,13 @@ const ProjectBoard: React.FC = () => {
 
   // Filter tasks based on search and filters
   const filteredTasks = tasks.filter(task => {
-    // Search filter
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const matchesSearch = task.title.toLowerCase().includes(q) ||
         (task.description && task.description.toLowerCase().includes(q));
       if (!matchesSearch) return false;
     }
-    // Priority filter
     if (filterPriority !== 'ALL' && task.priority !== filterPriority) return false;
-    // Assignee filter
     if (filterAssignee !== 'ALL' && (!task.assignee || task.assignee.id !== filterAssignee)) return false;
     return true;
   });
@@ -131,6 +151,70 @@ const ProjectBoard: React.FC = () => {
     } else {
       console.error('Failed to update task:', data.message);
     }
+  };
+
+  // Drag-and-drop: task moved to a different column
+  const onTaskDrop = async (taskId: string, targetStatus: Status) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const currentStatus = task.status;
+    if (currentStatus === targetStatus) return; // Stay in same column, handled below
+    if (targetStatus === STATUS_ORDER[0]) {
+      // Moving to TODO: move backward
+      const idx = STATUS_ORDER.indexOf(currentStatus);
+      if (idx > 0) {
+        const prevStatus = STATUS_ORDER[idx - 1];
+        await api.patch(`/api/tasks/${taskId}`, { status: prevStatus });
+        const tasksData = await api.get(`/api/tasks?projectId=${id}`);
+        if (tasksData.success) setTasks([...tasksData.tasks]);
+      }
+    } else {
+      await moveTask(taskId, currentStatus);
+    }
+    setDraggedTaskId(null);
+    setDragOverTaskId(null);
+  };
+
+  // Drag-and-drop: reorder tasks within a column
+  const handleTaskDrop = async (e: React.DragEvent, status: Status) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragItemRef.current === null || dragOverItemRef.current === null) return;
+
+    const statusTasks = sortedTasks.filter(t => t.status === status);
+    if (statusTasks.length < 2) {
+      dragItemRef.current = null;
+      dragOverItemRef.current = null;
+      return;
+    }
+
+    const fromIndex = dragItemRef.current;
+    const toIndex = dragOverItemRef.current;
+    if (fromIndex === toIndex) {
+      dragItemRef.current = null;
+      dragOverItemRef.current = null;
+      return;
+    }
+
+    const newOrder = [...statusTasks];
+    const [movedTask] = newOrder.splice(fromIndex, 1);
+    newOrder.splice(toIndex, 0, movedTask);
+
+    // Update order in backend
+    try {
+      await api.post(`/api/tasks/reorder`, {
+        projectId: id,
+        status,
+        taskOrder: newOrder.map((t, i) => ({ id: t.id, order: i })),
+      });
+      const tasksData = await api.get(`/api/tasks?projectId=${id}`);
+      if (tasksData.success) setTasks([...tasksData.tasks]);
+    } catch (err) {
+      console.error('Failed to reorder tasks:', err);
+    }
+
+    dragItemRef.current = null;
+    dragOverItemRef.current = null;
   };
 
   const handleAddTask = async (e: React.FormEvent) => {
@@ -204,6 +288,115 @@ const ProjectBoard: React.FC = () => {
     setInviteSuccess('');
     setSearchResults([]);
     setShowDropdown(false);
+  };
+
+  // Subtask management
+  const toggleTaskExpansion = (taskId: string) => {
+    setExpandedTaskId(expandedTaskId === taskId ? null : taskId);
+  };
+
+  const getSubtaskProgress = (subtasks: Subtask[]) => {
+    if (!subtasks || subtasks.length === 0) return { completed: 0, total: 0, percent: 0 };
+    const completed = subtasks.filter(s => s.completed).length;
+    return { completed, total: subtasks.length, percent: Math.round((completed / subtasks.length) * 100) };
+  };
+
+  const handleAddSubtask = async (taskId: string) => {
+    if (!newSubtaskTitle.trim() || !id) return;
+    try {
+      const data = await api.post(`/api/tasks/${taskId}/subtasks`, {
+        title: newSubtaskTitle.trim(),
+      });
+      if (data.success) {
+        const tasksData = await api.get(`/api/tasks?projectId=${id}`);
+        if (tasksData.success) setTasks([...tasksData.tasks]);
+        setNewSubtaskTitle('');
+        setAddingSubtaskId(null);
+      }
+    } catch (err) {
+      console.error('Failed to add subtask:', err);
+    }
+  };
+
+  const handleDeleteSubtask = async (taskId: string, subtaskId: string) => {
+    try {
+      const data = await api.delete(`/api/tasks/${taskId}/subtasks/${subtaskId}`);
+      if (data.success) {
+        const tasksData = await api.get(`/api/tasks?projectId=${id}`);
+        if (tasksData.success) setTasks([...tasksData.tasks]);
+      }
+    } catch (err) {
+      console.error('Failed to delete subtask:', err);
+    }
+  };
+
+  const handleToggleSubtask = async (taskId: string, subtaskId: string, completed: boolean) => {
+    try {
+      const data = await api.patch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, { completed: !completed });
+      if (data.success) {
+        const tasksData = await api.get(`/api/tasks?projectId=${id}`);
+        if (tasksData.success) setTasks([...tasksData.tasks]);
+      }
+    } catch (err) {
+      console.error('Failed to toggle subtask:', err);
+    }
+  };
+
+  const handleStartEditSubtask = (subtask: Subtask) => {
+    setEditingSubtaskId(subtask.id);
+    setEditingSubtaskTitle(subtask.title);
+  };
+
+  const handleSaveSubtask = async (taskId: string, subtaskId: string) => {
+    if (!editingSubtaskTitle.trim()) return;
+    try {
+      const data = await api.patch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
+        title: editingSubtaskTitle.trim(),
+      });
+      if (data.success) {
+        const tasksData = await api.get(`/api/tasks?projectId=${id}`);
+        if (tasksData.success) setTasks([...tasksData.tasks]);
+      }
+    } catch (err) {
+      console.error('Failed to update subtask:', err);
+    }
+    setEditingSubtaskId(null);
+    setEditingSubtaskTitle('');
+  };
+
+  // Drag-and-drop for subtasks
+  const handleSubtaskDrop = async (taskId: string, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (subtaskDragItemRef.current === null || subtaskDragOverItemRef.current === null) return;
+
+    const task = tasks.find(t => t.id === taskId);
+    if (!task?.subtasks || task.subtasks.length < 2) return;
+
+    const fromIndex = subtaskDragItemRef.current;
+    const toIndex = subtaskDragOverItemRef.current;
+    if (fromIndex === toIndex) {
+      subtaskDragItemRef.current = null;
+      subtaskDragOverItemRef.current = null;
+      return;
+    }
+
+    const newOrder = [...task.subtasks];
+    const [movedSubtask] = newOrder.splice(fromIndex, 1);
+    newOrder.splice(toIndex, 0, movedSubtask);
+
+    try {
+      await api.post(`/api/tasks/${taskId}/reorder-subtasks`, {
+        subtaskOrder: newOrder.map((s, i) => ({ id: s.id, order: i })),
+      });
+      const tasksData = await api.get(`/api/tasks?projectId=${id}`);
+      if (tasksData.success) setTasks([...tasksData.tasks]);
+    } catch (err) {
+      console.error('Failed to reorder subtasks:', err);
+    }
+
+    subtaskDragItemRef.current = null;
+    subtaskDragOverItemRef.current = null;
   };
 
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
@@ -323,9 +516,21 @@ const ProjectBoard: React.FC = () => {
             IN_REVIEW: 'kanban-in-review',
             DONE: 'kanban-done'
           }[status];
-          
+
           return (
-            <div key={status} className={`flex-shrink-0 w-72 bg-[var(--card)]/50 backdrop-blur-sm rounded-xl border border-border-subtle/50 ${colClass}`}>
+            <div
+              key={status}
+              className={`flex-shrink-0 w-72 bg-[var(--card)]/50 backdrop-blur-sm rounded-xl border border-border-subtle/50 ${colClass}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedTaskId) {
+                  onTaskDrop(draggedTaskId, status);
+                }
+              }}
+            >
               <div className="p-3 border-b border-border-subtle/50 flex items-center gap-2">
                 <h2 className="font-semibold text-sm uppercase tracking-wide text-text-subtle">{COLUMN_TITLES[status]}</h2>
                 <span className="text-xs bg-[var(--accent)] text-white font-semibold rounded-full px-2.5 py-0.75 shadow-sm">
@@ -333,10 +538,41 @@ const ProjectBoard: React.FC = () => {
                 </span>
               </div>
               <div className="p-2.5 space-y-2.5 min-h-[80px]">
-                {columnTasks.map(task => (
+                {columnTasks.map((task, index) => (
                   <div
                     key={task.id}
-                    className="bg-[var(--card)] border border-border-subtle/50 rounded-lg p-3.5 hover:border-accent/20 hover:-translate-y-0.5 transition-all-fast cursor-pointer group shadow-sm hover:shadow-md"
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDraggedTaskId(task.id);
+                      dragItemRef.current = index;
+                    }}
+                    onDragEnd={() => {
+                      setDraggedTaskId(null);
+                      dragItemRef.current = null;
+                      dragOverItemRef.current = null;
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      dragOverItemRef.current = index;
+                      setDragOverTaskId(task.id);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (dragOverTaskId === task.id) {
+                        handleTaskDrop(e, status);
+                      } else {
+                        onTaskDrop(draggedTaskId!, status);
+                      }
+                      dragItemRef.current = null;
+                      dragOverItemRef.current = null;
+                      setDragOverTaskId(null);
+                    }}
+                    className={`bg-[var(--card)] border border-border-subtle/50 rounded-lg p-3.5 hover:border-accent/20 hover:-translate-y-0.5 transition-all-fast cursor-grab group shadow-sm hover:shadow-md ${
+                      draggedTaskId === task.id ? 'opacity-40 scale-95' : ''
+                    } ${dragOverTaskId === task.id ? 'ring-2 ring-accent/50 border-accent' : ''}`}
                   >
                     <div className="flex justify-between items-start gap-2 mb-2">
                       <h3 className="font-semibold text-sm flex-1 leading-snug group-hover:text-white transition-colors">{task.title}</h3>
@@ -359,6 +595,204 @@ const ProjectBoard: React.FC = () => {
                         Due {new Date(task.dueDate).toLocaleDateString()}
                       </p>
                     )}
+
+                    {/* Subtasks section */}
+                    {task.subtasks && task.subtasks.length > 0 && (() => {
+                      const progress = getSubtaskProgress(task.subtasks);
+                      return (
+                        <div className="mt-2 pt-2 border-t border-border-subtle/30">
+                          <button
+                            onClick={() => toggleTaskExpansion(task.id)}
+                            className="flex items-center justify-between w-full text-xs text-text-subtle hover:text-text transition-colors mb-1"
+                          >
+                            <span className="flex items-center gap-1">
+                              <svg className={`w-3 h-3 transition-transform ${expandedTaskId === task.id ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                              {progress.completed}/{progress.total} subtasks
+                            </span>
+                            <span className="text-[10px] text-text-muted">{progress.percent}%</span>
+                          </button>
+
+                          {/* Progress bar */}
+                          <div className="w-full h-1 bg-gray-700/50 rounded-full overflow-hidden mb-1">
+                            <div
+                              className="h-full bg-accent/60 rounded-full transition-all duration-300"
+                              style={{ width: `${progress.percent}%` }}
+                            />
+                          </div>
+
+                          {/* Subtasks list */}
+                          {expandedTaskId === task.id && (
+                            <div className="space-y-1">
+                              {task.subtasks.map((subtask, subIndex) => (
+                                <div
+                                  key={subtask.id}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    subtaskDragItemRef.current = subIndex;
+                                    e.stopPropagation();
+                                  }}
+                                  onDragEnter={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    subtaskDragOverItemRef.current = subIndex;
+                                  }}
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                  }}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleSubtaskDrop(task.id, e);
+                                  }}
+                                  className={`flex items-center gap-2 px-2 py-1 rounded text-xs group/subtask hover:bg-[var(--card-faint)] transition-colors ${
+                                    subtaskDragOverItemRef.current === subIndex ? 'ring-1 ring-accent/50' : ''
+                                  }`}
+                                >
+                                  <button
+                                    onClick={() => handleToggleSubtask(task.id, subtask.id, subtask.completed)}
+                                    className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                      subtask.completed
+                                        ? 'bg-accent border-accent'
+                                        : 'border-text-subtle/50 hover:border-accent/50'
+                                    }`}
+                                  >
+                                    {subtask.completed && (
+                                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                  <span className={`flex-1 truncate ${subtask.completed ? 'line-through text-text-muted' : 'text-text'}`}>
+                                    {editingSubtaskId === subtask.id ? (
+                                      <input
+                                        type="text"
+                                        value={editingSubtaskTitle}
+                                        onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                                        onBlur={() => handleSaveSubtask(task.id, subtask.id)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleSaveSubtask(task.id, subtask.id);
+                                          if (e.key === 'Escape') setEditingSubtaskId(null);
+                                        }}
+                                        className="w-full bg-transparent border border-accent/50 rounded px-1 py-0.5 text-xs focus:outline-none"
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      <span
+                                        onDoubleClick={() => handleStartEditSubtask(subtask)}
+                                        className="cursor-pointer"
+                                      >
+                                        {subtask.title}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <div className="opacity-0 group-hover/subtask:opacity-100 transition-opacity flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleStartEditSubtask(subtask)}
+                                      className="text-text-muted hover:text-text transition-colors"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteSubtask(task.id, subtask.id)}
+                                      className="text-text-muted hover:text-error transition-colors"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              <button
+                                onClick={() => setAddingSubtaskId(task.id)}
+                                className="flex items-center gap-1 text-text-muted hover:text-accent transition-colors text-xs w-full mt-1"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                Add subtask
+                              </button>
+
+                              {/* Add subtask input */}
+                              {addingSubtaskId === task.id && (
+                                <form
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handleAddSubtask(task.id);
+                                  }}
+                                  className="flex items-center gap-1 mt-1"
+                                >
+                                  <input
+                                    type="text"
+                                    value={newSubtaskTitle}
+                                    onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                                    placeholder="New subtask..."
+                                    className="flex-1 bg-transparent border border-border-subtle rounded px-2 py-1 text-xs focus:outline-none focus:border-accent/50"
+                                    autoFocus
+                                  />
+                                  <button type="submit" className="text-accent hover:text-accent/80 text-xs">Add</button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setAddingSubtaskId(null); setNewSubtaskTitle(''); }}
+                                    className="text-text-muted hover:text-text text-xs"
+                                  >
+                                    Cancel
+                                  </button>
+                                </form>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Subtask add button for tasks without subtasks */}
+                    {(!task.subtasks || task.subtasks.length === 0) && (
+                      <div className="mt-2 pt-2 border-t border-border-subtle/30">
+                        <button
+                          onClick={() => { setAddingSubtaskId(task.id); }}
+                          className="flex items-center gap-1 text-text-muted hover:text-accent transition-colors text-xs w-full"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Add subtask
+                        </button>
+                        {addingSubtaskId === task.id && (
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              handleAddSubtask(task.id);
+                            }}
+                            className="flex items-center gap-1 mt-1"
+                          >
+                            <input
+                              type="text"
+                              value={newSubtaskTitle}
+                              onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                              placeholder="New subtask..."
+                              className="flex-1 bg-transparent border border-border-subtle rounded px-2 py-1 text-xs focus:outline-none focus:border-accent/50"
+                              autoFocus
+                            />
+                            <button type="submit" className="text-accent hover:text-accent/80 text-xs">Add</button>
+                            <button
+                              type="button"
+                              onClick={() => { setAddingSubtaskId(null); setNewSubtaskTitle(''); }}
+                              className="text-text-muted hover:text-text text-xs"
+                            >
+                              Cancel
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex justify-between items-center mt-2 pt-2 border-t border-border-subtle/30">
                       {nextStatus ? (
                         <button
@@ -383,13 +817,8 @@ const ProjectBoard: React.FC = () => {
                   </div>
                 ))}
                 {columnTasks.length === 0 && (
-                  <div className="empty-state border-2 border-dashed border-border-subtle/40 rounded-lg">
-                    <div className="empty-icon">
-                      <svg className="w-4 h-4 text-text-subtle/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </div>
-                    <p className="empty-text">No tasks</p>
+                  <div className="text-center py-6 text-text-muted/50 text-xs">
+                    Drag tasks here
                   </div>
                 )}
               </div>
@@ -498,35 +927,24 @@ const ProjectBoard: React.FC = () => {
                     type="text"
                     value={inviteEmail}
                     onChange={e => handleInviteSearch(e.target.value)}
-                    onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-                    onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
-                    placeholder="Start typing a name or email..."
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Search..."
                     required
-                    autoFocus
                   />
                   {showDropdown && searchResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-md shadow-xl z-10 overflow-hidden">
-                      {searchResults.map(u => (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-md shadow-lg max-h-48 overflow-y-auto z-10">
+                      {searchResults.map(user => (
                         <button
-                          key={u.id}
+                          key={user.id}
                           type="button"
-                          onMouseDown={() => selectSearchResult(u)}
-                          className="w-full text-left px-3 py-2 hover:bg-gray-800 flex items-center gap-3 transition-colors"
+                          onClick={() => selectSearchResult(user)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-700 transition-colors"
                         >
-                          <div className="w-8 h-8 rounded-full bg-blue-700 flex items-center justify-center text-sm font-semibold shrink-0">
-                            {u.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-sm text-white">{u.name}</p>
-                            <p className="text-xs text-gray-400">{u.email}</p>
-                          </div>
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-sm text-gray-400">{user.email}</div>
                         </button>
                       ))}
                     </div>
-                  )}
-                  {inviteEmail.length >= 2 && !showDropdown && searchResults.length === 0 && (
-                    <p className="mt-1 text-xs text-gray-500">No users found — you can still invite by exact email</p>
                   )}
                 </div>
               </div>
@@ -536,7 +954,7 @@ const ProjectBoard: React.FC = () => {
                   onClick={closeInviteModal}
                   className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600"
                 >
-                  Close
+                  Cancel
                 </button>
                 <button
                   type="submit"

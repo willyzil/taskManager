@@ -4,7 +4,7 @@ export interface ActivityLog {
   id: string;
   projectId: string;
   userId: string;
-  action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'TASK_DELETED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
+  action: string;
   entityId?: string;
   metadata: unknown;
   createdAt: Date;
@@ -15,7 +15,7 @@ export interface ActivityLog {
 export interface CreateActivityLogInput {
   projectId: string;
   userId: string;
-  action: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'TASK_DELETED' | 'COMMENT_ADDED' | 'PROJECT_CREATED' | 'PROJECT_UPDATED' | 'MEMBER_INVITED';
+  action: string;
   entityId?: string;
   metadata: Record<string, unknown> | null;
 }
@@ -26,7 +26,7 @@ export async function createActivityLog(input: CreateActivityLogInput): Promise<
       data: {
         projectId: input.projectId,
         userId: input.userId,
-        action: input.action,
+        action: input.action as any,
         entityId: input.entityId || null,
         metadata: input.metadata as any,
       },

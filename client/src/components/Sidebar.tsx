@@ -34,7 +34,6 @@ const Sidebar: React.FC<{ mobileOpen?: boolean }> = ({ mobileOpen = false }) => 
     if (!socket) return;
     const handler = (n: Notification) =>
       setNotifications(prev => {
-        // Only add if not already present (prevents duplicates)
         if (prev.find(p => p.id === n.id)) return prev;
         return [n, ...prev];
       });
@@ -52,6 +51,33 @@ const Sidebar: React.FC<{ mobileOpen?: boolean }> = ({ mobileOpen = false }) => 
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
+  const navLink = (path: string, label: string, icon: React.ReactNode) => (
+    <li key={path}>
+      <Link
+        to={path}
+        className={`flex w-full px-4 py-2.5 rounded-lg mb-1.5 flex items-center gap-2.5 cursor-pointer transition-all-fast hover:bg-[var(--card)]/50 hover:translate-x-0.5 ${isActive(path) ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-l-2 border-accent bg-[var(--card)]/60 text-text-inverse' : 'text-text-subtle hover:text-text'}`}
+      >
+        {icon}
+        {label}
+      </Link>
+    </li>
+  );
+
+  const navItems = (
+    <>
+      {navLink('/dashboard', 'Projects', (
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+      ))}
+      {navLink('/calendar', 'Calendar', (
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ))}
+    </>
+  );
+
   return (
     <>
       {/* Desktop sidebar — always visible, fixed layout */}
@@ -67,17 +93,7 @@ const Sidebar: React.FC<{ mobileOpen?: boolean }> = ({ mobileOpen = false }) => 
 
         <nav className="flex-1 py-4 px-2 overflow-y-auto">
           <ul className="space-y-1">
-            <li>
-              <Link
-                to="/dashboard"
-                className={`flex w-full px-4 py-2.5 rounded-lg mb-1.5 flex items-center gap-2.5 cursor-pointer transition-all-fast hover:bg-[var(--card)]/50 hover:translate-x-0.5 ${isActive('/dashboard') ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-l-2 border-accent bg-[var(--card)]/60 text-text-inverse' : 'text-text-subtle hover:text-text'}`}
-              >
-                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-                Projects
-              </Link>
-            </li>
+            {navItems}
           </ul>
         </nav>
 
@@ -169,17 +185,7 @@ const Sidebar: React.FC<{ mobileOpen?: boolean }> = ({ mobileOpen = false }) => 
 
         <nav className="flex-1 py-4 px-2 overflow-y-auto">
           <ul className="space-y-1">
-            <li>
-              <Link
-                to="/dashboard"
-                className={`flex w-full px-4 py-2.5 rounded-lg mb-1.5 flex items-center gap-2.5 cursor-pointer transition-all-fast hover:bg-[var(--card)]/50 hover:translate-x-0.5 ${isActive('/dashboard') ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-l-2 border-accent bg-[var(--card)]/60 text-text-inverse' : 'text-text-subtle hover:text-text'}`}
-              >
-                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-                Projects
-              </Link>
-            </li>
+            {navItems}
           </ul>
         </nav>
 

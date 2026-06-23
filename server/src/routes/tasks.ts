@@ -5,6 +5,13 @@ import { getIo } from '../socket';
 import { createActivityLog } from '../models/activity';
 import { z } from 'zod';
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  order: number;
+}
+
 // Input sanitization helper
 function sanitize(str: string): string {
   return str.replace(/<[^>]*>/g, '').trim().slice(0, 500);
@@ -18,6 +25,7 @@ const taskUpdateSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
   dueDate: z.string().datetime().optional(),
   assigneeId: z.string().min(1).optional(),
+  tagIds: z.array(z.string()).optional(),
 });
 
 const router = express.Router();
@@ -25,6 +33,11 @@ const router = express.Router();
 const taskInclude = {
   assignee: { select: { id: true, name: true, avatar: true } },
   creator: { select: { id: true, name: true, avatar: true } },
+  subtasks: { select: { id: true, title: true, completed: true, order: true } },
+  taskTags: {
+    include: { tag: { select: { id: true, name: true, color: true } } },
+    orderBy: { tag: { name: 'asc' as const } },
+  },
 };
 
 async function notifyAssignee(assigneeId: string, taskTitle: string, taskId: string, projectId: string) {
@@ -79,10 +92,21 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
 // POST /api/tasks
 router.post('/', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { title, description, projectId, priority, dueDate, assigneeId } = req.body;
+    const { title, description, projectId, priority, dueDate, assigneeId, tagIds } = req.body;
     if (!title || !projectId) {
       return res.status(400).json({ success: false, message: 'title and projectId are required' });
     }
+
+    // Validate tagIds if provided
+    if (tagIds && tagIds.length > 0) {
+      const tags = await prisma.tag.findMany({ where: { id: { in: tagIds } } });
+      const foundIds = new Set(tags.map(t => t.id));
+      const invalid = tagIds.filter(id => !foundIds.has(id));
+      if (invalid.length > 0) {
+        return res.status(400).json({ success: false, message: 'Invalid tag IDs: ' + invalid.join(', ') });
+      }
+    }
+
     const task = await prisma.task.create({
       data: {
         title,
@@ -92,6 +116,11 @@ router.post('/', requireAuth, async (req: AuthRequest, res) => {
         priority: priority || 'MEDIUM',
         dueDate: dueDate ? new Date(dueDate) : null,
         ...(assigneeId && { assigneeId }),
+        ...(tagIds && tagIds.length > 0 && {
+          taskTags: {
+            create: tagIds.map(id => ({ tag: { connect: { id } } })),
+          },
+        }),
       },
       include: taskInclude,
     });
@@ -152,7 +181,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
       });
     }
 
-    const { title, description, priority, dueDate, assigneeId, status } = validated.data;
+    const { title, description, priority, dueDate, assigneeId, status, tagIds } = validated.data;
 
     const task = await prisma.task.findUnique({
       where: { id },
@@ -192,6 +221,20 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
       },
       include: taskInclude,
     });
+
+    // Handle tagIds update - replace all tags
+    if (tagIds !== undefined) {
+      await prisma.task.update({
+        where: { id },
+        data: {
+          taskTags: {
+            create: tagIds.map((id: string) => ({
+              tag: { connect: { id } },
+            })),
+          },
+        },
+      });
+    }
 
     // Determine activity type properly
     let activityAction: 'TASK_UPDATED' | 'TASK_MOVED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' = 'TASK_UPDATED';
@@ -407,6 +450,268 @@ router.delete('/:taskId/comments/:commentId', requireAuth, async (req: AuthReque
     res.json({ success: true, message: 'Comment deleted successfully' });
   } catch (error) {
     console.error('Error deleting comment:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ===== SUBTASK ROUTES =====
+
+// GET /api/tasks/:taskId/subtasks
+router.get('/:taskId/subtasks', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { taskId } = req.params;
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { project: { select: { id: true, ownerId: true } } },
+    });
+
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+    const isProjectMember = await isMember(req.user!.id, task.projectId);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    const subtasks = await prisma.subtask.findMany({
+      where: { taskId },
+      orderBy: { order: 'asc' },
+    });
+
+    res.json({ success: true, subtasks });
+  } catch (error) {
+    console.error('Error getting subtasks:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// POST /api/tasks/:taskId/subtasks
+router.post('/:taskId/subtasks', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { taskId } = req.params;
+    const { title, order } = req.body;
+
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ success: false, message: 'Subtask title is required' });
+    }
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { project: { select: { id: true, name: true, ownerId: true } } },
+    });
+
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+    const isProjectMember = await isMember(req.user!.id, task.projectId);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    const sanitizedTitle = sanitize(title);
+
+    const maxOrder = await prisma.subtask.aggregate({
+      where: { taskId },
+      _max: { order: true },
+    });
+    const nextOrder = (maxOrder._max.order ?? -1) + 1;
+
+    const subtask = await prisma.subtask.create({
+      data: {
+        taskId,
+        title: sanitizedTitle,
+        order: order ?? nextOrder,
+      },
+    });
+
+    res.status(201).json({ success: true, subtask });
+  } catch (error) {
+    console.error('Error creating subtask:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// PATCH /api/tasks/:taskId/subtasks/:subtaskId
+router.patch('/:taskId/subtasks/:subtaskId', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { taskId, subtaskId } = req.params;
+    const { title, completed, order } = req.body;
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { project: { select: { id: true, name: true, ownerId: true } } },
+    });
+
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+    const isProjectMember = await isMember(req.user!.id, task.projectId);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    const existingSubtask = await prisma.subtask.findFirst({
+      where: { id: subtaskId, taskId },
+    });
+
+    if (!existingSubtask) return res.status(404).json({ success: false, message: 'Subtask not found' });
+
+    const updates: Record<string, any> = {};
+    if (title !== undefined) updates.title = sanitize(title);
+    if (completed !== undefined) updates.completed = completed;
+    if (order !== undefined) updates.order = order;
+
+    if (Object.keys(updates).length === 0) {
+      return res.json({ success: true, subtask: existingSubtask });
+    }
+
+    const subtask = await prisma.subtask.update({
+      where: { id: subtaskId },
+      data: updates,
+    });
+
+    res.json({ success: true, subtask });
+  } catch (error) {
+    console.error('Error updating subtask:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// DELETE /api/tasks/:taskId/subtasks/:subtaskId
+router.delete('/:taskId/subtasks/:subtaskId', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { taskId, subtaskId } = req.params;
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { project: { select: { id: true, name: true, ownerId: true } } },
+    });
+
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+    const isProjectMember = await isMember(req.user!.id, task.projectId);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    const existingSubtask = await prisma.subtask.findFirst({
+      where: { id: subtaskId, taskId },
+    });
+
+    if (!existingSubtask) return res.status(404).json({ success: false, message: 'Subtask not found' });
+
+    await prisma.subtask.delete({ where: { id: subtaskId } });
+
+    res.json({ success: true, message: 'Subtask deleted' });
+  } catch (error) {
+    console.error('Error deleting subtask:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// POST /api/tasks/:taskId/reorder-subtasks - bulk reorder
+router.post('/:taskId/reorder-subtasks', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { taskId } = req.params;
+    const { subtaskOrder } = req.body;
+
+    if (!Array.isArray(subtaskOrder)) {
+      return res.status(400).json({ success: false, message: 'subtaskOrder must be an array of { id, order }' });
+    }
+
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { project: { select: { id: true, ownerId: true } } },
+    });
+
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+
+    const isProjectMember = await isMember(req.user!.id, task.projectId);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    const updates = subtaskOrder.map(({ id, order }: { id: string; order: number }) =>
+      prisma.subtask.update({
+        where: { id },
+        data: { order },
+      }),
+    );
+
+    await prisma.$transaction(updates);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error reordering subtasks:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+
+// ===== EXPORT ENDPOINT =====
+
+// GET /api/tasks/export?projectId=xxx&format=json|csv
+router.get('/export', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { projectId, format } = req.query;
+    if (!projectId) return res.status(400).json({ success: false, message: 'projectId is required' });
+    if (!format || (format !== 'json' && format !== 'csv')) {
+      return res.status(400).json({ success: false, message: 'format must be "json" or "csv"' });
+    }
+
+    const isProjectMember = await isMember(req.user!.id, projectId as string);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    const tasks = await prisma.task.findMany({
+      where: { projectId: projectId as string },
+      include: {
+        assignee: { select: { id: true, name: true } },
+        creator: { select: { id: true, name: true } },
+        subtasks: { select: { id: true, title: true, completed: true } },
+        taskTags: {
+          include: { tag: { select: { id: true, name: true, color: true } } },
+          orderBy: { tag: { name: 'asc' as const } },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId as string },
+      select: { name: true, createdAt: true },
+    });
+
+    if (format === 'json') {
+      const exportData = {
+        project: project?.name || 'Unknown',
+        exportedAt: new Date().toISOString(),
+        taskCount: tasks.length,
+        tasks: tasks.map(t => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          status: t.status,
+          priority: t.priority,
+          assignee: t.assignee?.name || null,
+          creator: t.creator.name,
+          dueDate: t.dueDate?.toISOString() || null,
+          createdAt: t.createdAt.toISOString(),
+          subtasks: t.subtasks.map(s => ({ title: s.title, completed: s.completed })),
+          tags: t.taskTags.map(tt => ({ name: tt.tag.name, color: tt.tag.color })),
+        })),
+      };
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="taskmanager-${projectId}.json"`);
+      res.json(exportData);
+    } else {
+      // CSV format
+      const header = 'ID,Title,Description,Status,Priority,Assignee,Creator,Due Date,Created At';
+      const rows = tasks.map(t => [
+        t.id,
+        `"${t.title.replace(/"/g, '""')}"`,
+        `"${(t.description || '').replace(/"/g, '""')}"`,
+        t.status,
+        t.priority,
+        t.assignee?.name || '',
+        t.creator.name,
+        t.dueDate?.toISOString() || '',
+        t.createdAt.toISOString(),
+      ].join(','));
+      const csv = [header, ...rows].join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="taskmanager-${projectId}.csv"`);
+      res.send(csv);
+    }
+  } catch (error) {
+    console.error('Error exporting tasks:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
