@@ -80,7 +80,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
     const tasks = await prisma.task.findMany({
       where: { projectId: projectId as string },
       include: taskInclude,
-      orderBy: { createdAt: 'asc' },
+      orderBy: { taskOrder: 'asc' },
     });
     res.json({ success: true, tasks });
   } catch (error) {
@@ -196,12 +196,12 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
     const isProjectMember = await isMember(req.user!.id, task.projectId);
     if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
 
-    // Permission check: only task creator, assignee, or project owner can update
+    // Permission check: task creator, assignee, project owner, or project member can update
     const isCreator = task.createdById === req.user!.id;
     const isAssignee = task.assigneeId === req.user!.id;
     const isOwner = task.project.ownerId === req.user!.id;
 
-    if (!isCreator && !isAssignee && !isOwner) {
+    if (!isCreator && !isAssignee && !isOwner && !isProjectMember) {
       return res.status(403).json({ success: false, message: 'Insufficient permissions' });
     }
 
@@ -303,6 +303,25 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
     console.log('Emitting activity to users:', Array.from(recipientIds));
     const io = getIo();
     recipientIds.forEach(uid => io.to(`user:${uid}`).emit('activity:new', activityData));
+
+    // Also emit full task list update when status changes (for real-time board sync)
+    if (status !== undefined) {
+      const fullTaskList = await prisma.task.findMany({
+        where: { projectId: task.projectId },
+        include: taskInclude,
+        orderBy: { taskOrder: 'asc' },
+      });
+      const taskListData = {
+        projectId: task.projectId,
+        tasks: fullTaskList,
+        userId: req.user!.id,
+        userName: req.user?.name,
+        createdAt: new Date(),
+      };
+      recipientIds.forEach(uid => {
+        io.to(`user:${uid}`).emit('tasks:updated', taskListData);
+      });
+    }
 
     res.json({ success: true, task: updatedTask });
   } catch (error) {
@@ -631,6 +650,86 @@ router.post('/:taskId/reorder-subtasks', requireAuth, async (req: AuthRequest, r
     res.json({ success: true });
   } catch (error) {
     console.error('Error reordering subtasks:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ===== TASK REORDER / MOVE ENDPOINT =====
+
+// PATCH /api/tasks/reorder
+router.patch('/reorder', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { tasks } = req.body;
+
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return res.status(400).json({ success: false, message: 'tasks must be a non-empty array' });
+    }
+
+    // Validate all tasks belong to the same project
+    const projectId = (tasks[0] as any).projectId || (tasks[0] as any).projectId;
+    if (!projectId) {
+      return res.status(400).json({ success: false, message: 'projectId is required' });
+    }
+    const isProjectMember = await isMember(req.user!.id, projectId as string);
+    if (!isProjectMember) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    // Batch update all tasks with new status/order
+    const updates = tasks.map(({ id, status, taskOrder }: { id: string; status?: string; taskOrder: number }) =>
+      prisma.task.update({
+        where: { id },
+        data: {
+          ...(status && { status }),
+          ...(taskOrder !== undefined && { taskOrder: taskOrder }),
+        },
+      }),
+    );
+
+    const result = await prisma.$transaction(updates);
+
+    // Fetch updated tasks for real-time sync
+    const updatedTasks = await prisma.task.findMany({
+      where: { projectId },
+      include: {
+        assignee: { select: { id: true, name: true, avatar: true } },
+        creator: { select: { id: true, name: true, avatar: true } },
+        subtasks: { select: { id: true, title: true, completed: true, order: true } },
+        taskTags: {
+          include: { tag: { select: { id: true, name: true, color: true } } },
+          orderBy: { tag: { name: 'asc' as const } },
+        },
+      },
+      orderBy: { taskOrder: 'asc' },
+    });
+
+    const taskListData = {
+      projectId,
+      tasks: updatedTasks,
+      userId: req.user!.id,
+      userName: req.user?.name,
+      createdAt: new Date(),
+    };
+
+    // Emit real-time task list update to all project members
+    const memberships = await prisma.projectMember.findMany({
+      where: { projectId },
+      select: { userId: true },
+    });
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { ownerId: true },
+    });
+    const recipientIds = new Set([
+      project?.ownerId || '',
+      ...memberships.map(m => m.userId),
+    ]);
+    const io = getIo();
+    recipientIds.forEach(uid => {
+      if (uid) io.to(`user:${uid}`).emit('tasks:updated', taskListData);
+    });
+
+    res.json({ success: true, tasks: updatedTasks });
+  } catch (error) {
+    console.error('Error reordering tasks:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
