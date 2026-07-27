@@ -541,7 +541,7 @@ const ProjectBoard: React.FC = () => {
                         className={`${snapshot.isDragging ? 'opacity-80 rotate-2 shadow-2xl z-50' : ''} bg-[var(--card)] border border-border-subtle/50 rounded-lg p-3.5 hover:border-accent/20 hover:-translate-y-0.5 transition-all-fast shadow-sm hover:shadow-md select-none group`}
                       >
                     <div className="flex justify-between items-start gap-2 mb-2">
-                      <h3 className="font-semibold text-sm flex-1 leading-snug group-hover:text-white transition-colors">{task.title}</h3>
+                      <h3 className="font-semibold text-sm flex-1 leading-snug group-hover:text-text transition-colors">{task.title}</h3>
                       <span className={`text-xs rounded-full px-2 py-0.75 shrink-0 font-medium ${PRIORITY_COLORS[task.priority] || 'bg-gray-700/50 text-text-muted border border-gray-600/30'}`}>
                         {task.priority}
                       </span>

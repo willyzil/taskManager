@@ -92,7 +92,7 @@ const Dashboard: React.FC = () => {
             {projects.map(project => (
               <div key={project.id} className="bg-[var(--card)] border border-border-subtle rounded-xl p-5 transition-all-fast hover:shadow-xl hover:-translate-y-1 hover:border-accent/30 group cursor-pointer project-card">
                 <div className="flex justify-between items-start mb-3 project-header">
-                  <h2 className="text-xl font-bold tracking-tight group-hover:text-white transition-colors">{project.name}</h2>
+                  <h2 className="text-xl font-bold tracking-tight group-hover:text-text transition-colors">{project.name}</h2>
                   {project.ownerId === user?.id && (
                     <button
                       onClick={() => setConfirmDelete(project)}
