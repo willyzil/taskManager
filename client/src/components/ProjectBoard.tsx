@@ -323,6 +323,7 @@ const ProjectBoard: React.FC = () => {
         })
         .map((t) => ({
           id: t.id,
+          projectId: id,
           status: t.status,
           taskOrder: t.taskOrder,
         }));
