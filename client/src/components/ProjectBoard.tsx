@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-// FORCE_REBUILD_MARKER_xyz789: v3 - assignee dropdown
 import { useParams, useNavigate } from 'react-router-dom';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import type { DropResult } from '@hello-pangea/dnd';
 import { api } from '../api';
 import { useSocket } from '../contexts/SocketContext';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 const STATUS_ORDER = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'] as const;
 type Status = typeof STATUS_ORDER[number];
@@ -265,6 +267,76 @@ const ProjectBoard: React.FC = () => {
     setEditingSubtaskTitle('');
   };
 
+  // ===== DRAG & DROP REORDER =====
+  const prevTasksRef = useRef<Task[]>([]);
+
+  const onDragEnd = async (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+    if (!destination) return;
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    )
+      return;
+
+    // Snapshot current tasks before optimistic update (use functional setState to get latest)
+    const prevTasks = tasks;
+    prevTasksRef.current = prevTasks;
+
+    const fromStatus = source.droppableId as Status;
+    const toStatus = destination.droppableId as Status;
+
+    // Build new column arrays
+    let fromColumn = [...getTasksByStatus(fromStatus)];
+    let toColumn = [...(fromStatus === toStatus ? fromColumn : getTasksByStatus(toStatus))];
+
+    const [moved] = fromColumn.splice(source.index, 1);
+    toColumn.splice(destination.index, 0, moved);
+
+    // Rebuild full task list with updated orders/statuses
+    const newTasks = prevTasks.map((t) => {
+      if (t.status === fromStatus) {
+        const idx = fromColumn.findIndex((ct) => ct.id === t.id);
+        if (t.id === draggableId && fromStatus !== toStatus) {
+          // Moved to a different column
+          const toIdx = toColumn.findIndex((ct) => ct.id === t.id);
+          return { ...t, status: toStatus, taskOrder: toIdx };
+        }
+        if (idx >= 0) return { ...t, taskOrder: idx };
+      }
+      if (t.status === toStatus && fromStatus !== toStatus) {
+        const idx = toColumn.findIndex((ct) => ct.id === t.id);
+        if (idx >= 0) return { ...t, taskOrder: idx };
+      }
+      return t;
+    });
+
+    // Optimistic UI update
+    setTasks(newTasks);
+
+    // Batch update all changed tasks via reorder endpoint
+    try {
+      const changes = newTasks
+        .filter((t) => {
+          const orig = prevTasks.find((o) => o.id === t.id);
+          return orig && (orig.status !== t.status || orig.taskOrder !== t.taskOrder);
+        })
+        .map((t) => ({
+          id: t.id,
+          status: t.status,
+          taskOrder: t.taskOrder,
+        }));
+
+      if (changes.length > 0) {
+        await api.patch('/api/tasks/reorder', { tasks: changes });
+      }
+    } catch (err) {
+      console.error('Drag-and-drop reorder failed:', err);
+      // Revert to the snapshot taken at the start of this handler
+      setTasks([...prevTasks]);
+    }
+  };
+
   // ===== LOAD DATA =====
   useEffect(() => {
     if (!socket || !id) return;
@@ -276,6 +348,19 @@ const ProjectBoard: React.FC = () => {
     socket.on('tasks:updated', handleTasksUpdated);
     return () => { socket.off('tasks:updated', handleTasksUpdated); };
   }, [socket, id]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onNewTask: () => setShowAddTask(true),
+    onEscape: () => {
+      setShowAddTask(false);
+      setShowInvite(false);
+      setAssigneeTaskId(null);
+      setExpandedTaskId(null);
+      setAddingSubtaskId(null);
+      setEditingSubtaskId(null);
+    },
+  });
 
   useEffect(() => {
     if (!id) return;
@@ -402,8 +487,9 @@ const ProjectBoard: React.FC = () => {
         </div>
       </div>
 
-      {/* Kanban board */}
-      <div className="flex space-x-4 overflow-x-auto pb-4">
+      {/* Kanban board with drag-and-drop */}
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div className="flex space-x-4 overflow-x-auto pb-4">
         {STATUS_ORDER.map(status => {
           const columnTasks = getTasksByStatus(status);
           const nextStatus = STATUS_ORDER[STATUS_ORDER.indexOf(status) + 1];
@@ -426,13 +512,33 @@ const ProjectBoard: React.FC = () => {
                   {columnTasks.length}
                 </span>
               </div>
-              <div className="p-2.5 space-y-2.5 min-h-[80px]">
-                {columnTasks.map((task) => (
+              <Droppable droppableId={status}>
+                {(provided, snapshot) => (
                   <div
-                    key={task.id}
-                    data-task-id={task.id}
-                    className="bg-[var(--card)] border border-border-subtle/50 rounded-lg p-3.5 hover:border-accent/20 hover:-translate-y-0.5 transition-all-fast shadow-sm hover:shadow-md select-none group"
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className={`p-2.5 space-y-2.5 min-h-[80px] transition-colors ${
+                      snapshot.isDraggingOver ? 'bg-white/5 rounded-lg' : ''
+                    }`}
                   >
+                    {columnTasks.length === 0 && !snapshot.isDraggingOver && (
+                      <div className="flex flex-col items-center justify-center py-6 text-text-subtle/40">
+                        <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span className="text-xs">No tasks</span>
+                      </div>
+                    )}
+                {columnTasks.map((task, index) => (
+                  <Draggable key={task.id} draggableId={task.id} index={index}>
+                    {(draggableProvided, snapshot) => (
+                      <div
+                        ref={draggableProvided.innerRef}
+                        {...draggableProvided.draggableProps}
+                        {...draggableProvided.dragHandleProps}
+                        data-task-id={task.id}
+                        className={`${snapshot.isDragging ? 'opacity-80 rotate-2 shadow-2xl z-50' : ''} bg-[var(--card)] border border-border-subtle/50 rounded-lg p-3.5 hover:border-accent/20 hover:-translate-y-0.5 transition-all-fast shadow-sm hover:shadow-md select-none group`}
+                      >
                     <div className="flex justify-between items-start gap-2 mb-2">
                       <h3 className="font-semibold text-sm flex-1 leading-snug group-hover:text-white transition-colors">{task.title}</h3>
                       <span className={`text-xs rounded-full px-2 py-0.75 shrink-0 font-medium ${PRIORITY_COLORS[task.priority] || 'bg-gray-700/50 text-text-muted border border-gray-600/30'}`}>
@@ -673,12 +779,18 @@ const ProjectBoard: React.FC = () => {
                       </button>
                     </div>
                   </div>
+                    )}
+                  </Draggable>
                 ))}
+                {provided.placeholder}
               </div>
+                )}
+            </Droppable>
             </div>
           );
         })}
-      </div>
+        </div>
+      </DragDropContext>
 
       {/* Add Task Modal */}
       {showAddTask && (
