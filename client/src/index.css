@@ -26,313 +26,286 @@
     --sidebar-95: rgba(17, 24, 39, 0.95);
     --sidebar-half: rgba(17, 24, 39, 0.5);
   }
+
+  :root[data-theme="light"] {
+    --background: #F8FAFC;
+    --sidebar: #FFFFFF;
+    --card: #FFFFFF;
+    --card-hover: #F1F5F9;
+    --border: #E2E8F0;
+    --border-subtle: #EDF2F7;
+    --accent: #6366F1;
+    --accent-hover: #4F46E5;
+    --accent-glow: rgba(99, 102, 241, 0.15);
+    --text: #0F172A;
+    --text-muted: #475569;
+    --text-subtle: #64748B;
+    --text-inverse: #F9FAFB;
+    --success: #059669;
+    --warning: #D97706;
+    --error: #DC2626;
+    --card-faint: rgba(226, 232, 240, 0.5);
+    --card-50: rgba(255, 255, 255, 0.7);
+    --card-60: rgba(255, 255, 255, 0.85);
+    --sidebar-95: rgba(255, 255, 255, 0.95);
+    --sidebar-half: rgba(241, 245, 249, 0.6);
+  }
 }
 
 @layer utilities {
   .transition-all-fast {
     transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   }
-  
+
   .btn-primary {
     @apply bg-gradient-to-br from-indigo-500 to-purple-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all-fast hover:-translate-y-0.5 active:translate-y-0 active:shadow-md;
   }
-  
+
   .form-group {
     @apply mb-5;
   }
-  
+
   .form-group label {
-    @apply block text-sm font-medium text-white mb-2;
+    @apply block text-sm font-medium text-text mb-2;
   }
-  
+
   .form-group input,
   .form-group select,
   .form-group textarea {
-    @apply w-full px-4 py-2.5 rounded-lg border-2 border-gray-700 bg-gray-800/50 text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all-fast text-sm;
+    @apply w-full px-4 py-2.5 rounded-lg border-2 border-border bg-[var(--card-50)] text-text focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all-fast text-sm;
   }
-  
+
   .login-container {
     @apply min-h-screen flex items-center justify-center relative overflow-hidden;
   }
-  
+
   .login-container::before {
     @apply absolute inset-0 bg-gradient-to-br from-indigo-900/20 via-purple-900/10 to-pink-900/10;
     content: '';
   }
-  
+
   .login-form {
-    @apply max-w-md w-full bg-[var(--card)] p-8 rounded-2xl shadow-2xl border border-gray-700 relative z-10;
+    @apply max-w-md w-full bg-[var(--card)] p-8 rounded-2xl shadow-2xl border border-border relative z-10;
   }
-  
+
   .error {
     @apply text-red-500 mb-4 p-3 bg-red-500/10 border border-red-500/25 rounded-lg font-medium text-sm;
   }
-  
+
   .dashboard {
-    @apply min-h-screen bg-[var(--background)] text-white;
+    @apply min-h-screen bg-[var(--background)] text-text;
   }
-  
+
   .dashboard-header {
-    @apply flex justify-between items-center p-6 border-b border-gray-700 bg-[var(--card-faint)] backdrop-blur-sm;
+    @apply flex justify-between items-center p-6 border-b border-border bg-[var(--card-faint)] backdrop-blur-sm;
   }
-  
+
   .projects-section {
     @apply mb-8;
   }
-  
+
   .section-header {
     @apply flex justify-between items-center mb-6;
   }
-  
+
   .section-header h2 {
     @apply text-2xl font-bold tracking-tight;
   }
-  
+
   .projects-grid {
     @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
   }
-  
+
   .project-card {
-    @apply bg-[var(--card)] border border-gray-700 rounded-xl p-5 transition-all-fast hover:shadow-xl hover:-translate-y-1 hover:border-indigo-500/30 cursor-pointer;
+    @apply bg-[var(--card)] border border-border rounded-xl p-5 transition-all-fast hover:shadow-xl hover:-translate-y-1 hover:border-indigo-500/30 cursor-pointer;
   }
-  
+
   .project-header {
     @apply flex justify-between items-start gap-3 mb-3;
   }
-  
+
   .project-header h3 {
-    @apply text-xl font-bold tracking-tight mb-1 group-hover:text-white transition-colors;
+    @apply text-xl font-bold tracking-tight mb-1 group-hover:text-text transition-colors;
   }
-  
+
   .project-description {
-    @apply text-sm text-gray-400 line-clamp-2;
+    @apply text-sm text-text-muted line-clamp-2;
   }
-  
+
   .progress-bar {
     @apply h-2 mb-3 bg-[var(--sidebar-half)] rounded-full overflow-hidden;
   }
-  
+
   .progress-fill {
     @apply h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full;
   }
-  
+
   .progress-text {
-    @apply text-xs text-gray-500 text-right;
+    @apply text-xs text-text-subtle text-right;
   }
-  
+
   .project-meta {
-    @apply text-xs text-gray-500 mt-2;
+    @apply text-xs text-text-subtle mt-2;
   }
-  
+
   .kanban-board {
     @apply flex gap-4 mb-8 overflow-x-auto pb-2;
   }
-  
+
   .kanban-column {
-    @apply flex-1 min-w-[280px] max-w-[320px] bg-[var(--card-50)] backdrop-blur-sm rounded-xl border border-gray-700/50;
+    @apply flex-1 min-w-[280px] max-w-[320px] bg-[var(--card-50)] backdrop-blur-sm rounded-xl border border-border-subtle;
   }
-  
+
   .kanban-column h3 {
-    @apply text-sm font-semibold mb-3 px-3 py-2 text-gray-500 uppercase tracking-wide;
+    @apply text-sm font-semibold mb-3 px-3 py-2 text-text-subtle uppercase tracking-wide;
   }
-  
+
   .kanban-todo {
     border-top: 3px solid #4B5563;
   }
-  
+
   .kanban-in-progress {
     border-top: 3px solid #3B82F6;
   }
-  
+
   .kanban-in-review {
     border-top: 3px solid #F59E0B;
   }
-  
+
   .kanban-done {
     border-top: 3px solid #10B981;
   }
-  
+
   .task-list {
     @apply space-y-2.5 px-2;
   }
-  
+
   .task-card {
-    @apply bg-[var(--card)] border border-gray-700/50 rounded-lg p-3.5 mb-2.5 transition-all-fast hover:shadow-lg hover:border-indigo-500/20 hover:-translate-y-0.5 cursor-pointer group;
+    @apply bg-[var(--card)] border border-border-subtle rounded-lg p-3.5 mb-2.5 transition-all-fast hover:shadow-lg hover:border-indigo-500/20 hover:-translate-y-0.5 cursor-pointer group;
   }
-  
+
   .task-card h4 {
-    @apply text-sm font-semibold mb-1.5 leading-snug group-hover:text-white transition-colors;
+    @apply text-sm font-semibold mb-1.5 leading-snug group-hover:text-text transition-colors;
   }
-  
+
   .task-card p {
-    @apply text-xs text-gray-400 leading-relaxed line-clamp-2;
+    @apply text-xs text-text-muted leading-relaxed line-clamp-2;
   }
-  
+
   .task-meta {
-    @apply flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-gray-700/30;
+    @apply flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border-subtle;
   }
-  
+
   .priority {
     @apply px-2 py-1 rounded-full text-xs font-medium;
   }
-  
+
   .priority-low {
     @apply bg-gray-700/50 text-gray-400 border border-gray-600/30;
   }
-  
+
   .priority-medium {
     @apply bg-blue-600/20 text-blue-400 border border-blue-500/30;
   }
-  
+
   .priority-high {
     @apply bg-orange-500/20 text-orange-400 border border-orange-500/30;
   }
-  
+
   .priority-urgent {
     @apply bg-red-500/20 text-red-400 border border-red-500/30;
   }
-  
+
   .assignee {
     @apply flex items-center gap-1.5;
   }
-  
+
   .assignee-avatar {
     @apply w-5 h-5 rounded-full border-2 border-[var(--card)];
   }
-  
+
   .project-board-header h1 {
     @apply text-2xl font-bold tracking-tight;
   }
-  
+
   .project-board-header p {
-    @apply text-sm text-gray-400;
+    @apply text-sm text-text-muted;
   }
-  
+
   .create-task-form {
-    @apply mt-4 p-4 bg-[var(--card)] rounded-xl border border-gray-700;
+    @apply mt-4 p-4 bg-[var(--card)] rounded-xl border border-border;
   }
-  
+
   .empty-column {
-    @apply text-center py-8 text-gray-500 text-sm border-2 border-dashed border-gray-700/40 rounded-lg;
+    @apply text-center py-8 text-text-subtle text-sm border-2 border-dashed border-border-subtle rounded-lg;
   }
-  
+
   .empty-state {
     @apply flex flex-col items-center justify-center gap-2 py-6;
   }
-  
+
   .empty-icon {
-    @apply w-8 h-8 rounded-full bg-gray-800 bg-opacity-30 flex items-center justify-center mb-2;
+    @apply w-8 h-8 rounded-full bg-[var(--card-hover)] flex items-center justify-center mb-2;
   }
-  
+
   .empty-text {
-    @apply text-sm text-gray-500;
+    @apply text-sm text-text-subtle;
   }
-  
+
   .kanban-column-header {
     @apply flex justify-between items-center mb-3 px-3;
   }
-  
+
   .task-count-badge {
     @apply bg-[var(--accent)] text-white text-xs font-medium rounded-full px-3 py-1 shadow-sm;
   }
-  
+
   .btn-secondary {
-    @apply px-4 py-2.5 rounded-lg border-2 border-gray-700 text-white hover:bg-[var(--card)] transition-all-fast;
+    @apply px-4 py-2.5 rounded-lg border-2 border-border text-text hover:bg-[var(--card)] transition-all-fast;
   }
-  
+
   .btn-link {
-    @apply text-gray-500 hover:text-indigo-500 transition-colors flex items-center gap-1 text-sm font-medium;
+    @apply text-text-subtle hover:text-indigo-500 transition-colors flex items-center gap-1 text-sm font-medium;
   }
-  
+
   .avatar-stack {
     @apply relative inline-block;
   }
-  
+
   .avatar-stack::after {
     content: '';
     @apply absolute top-1/2 right-1/2 -translate-y-1/2 -translate-x-1/2 w-full h-full rounded-full border-2 border-[var(--sidebar)];
   }
-  
+
   .header-actions {
     @apply flex items-center gap-3;
   }
-  
+
   .header-info {
     @apply flex-1;
   }
-  
+
   .progress-section {
     @apply mb-6;
   }
-  
+
   .progress-section h2 {
     @apply text-lg font-semibold mb-2;
   }
-  
+
   .project-board {
     @apply min-h-screen bg-[var(--background)];
   }
-  
+
   .project-board-header {
-    @apply bg-[var(--card-faint)] border-b border-gray-700 p-4 backdrop-blur-sm;
+    @apply bg-[var(--card-faint)] border-b border-border p-4 backdrop-blur-sm;
   }
-  
+
   .project-board-content {
     @apply p-4;
   }
-  
+
   .project-board-footer {
     @apply p-4;
-  }
-}
-
-@layer components {
-  .kanban-todo {
-    border-top: 3px solid #4B5563;
-  }
-
-  .kanban-in-progress {
-    border-top: 3px solid #3B82F6;
-  }
-
-  .kanban-in-review {
-    border-top: 3px solid #F59E0B;
-  }
-
-  .kanban-done {
-    border-top: 3px solid #10B981;
-  }
-
-  .btn-secondary {
-    @apply px-4 py-2.5 rounded-lg border-2 border-gray-700 text-white hover:bg-[var(--card)] transition-all-fast;
-  }
-
-  .btn-primary {
-    @apply bg-gradient-to-br from-indigo-500 to-purple-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all-fast hover:-translate-y-0.5 active:translate-y-0 active:shadow-md;
-  }
-
-  .btn-link {
-    @apply text-gray-500 hover:text-indigo-500 transition-colors flex items-center gap-1 text-sm font-medium;
-  }
-
-  .avatar-stack {
-    @apply relative inline-block;
-  }
-
-  .avatar-stack::after {
-    content: '';
-    @apply absolute top-1/2 right-1/2 -translate-y-1/2 -translate-x-1/2 w-full h-full rounded-full border-2 border-[var(--sidebar)];
-  }
-
-  .empty-state {
-    @apply flex flex-col items-center justify-center gap-2 py-6;
-  }
-
-  .empty-icon {
-    @apply w-8 h-8 rounded-full bg-gray-800 bg-opacity-30 flex items-center justify-center mb-2;
-  }
-
-  .empty-text {
-    @apply text-sm text-gray-500;
   }
 }
